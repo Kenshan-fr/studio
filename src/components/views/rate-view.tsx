@@ -5,7 +5,7 @@ import { useLanguage } from "@/hooks/use-language";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
 import { useAuth } from "@/context/auth-provider";
-import { collection, onSnapshot, query, where, doc, getDoc, updateDoc, setDoc, limit } from "firebase/firestore";
+import { collection, onSnapshot, query, where, doc, getDoc, updateDoc, setDoc, limit, getDocs } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
@@ -46,7 +46,7 @@ export default function RateView() {
       // Filter out photos the user has already rated
       const ratingsRef = collection(db, `artifacts/${appId}/public/data/ratings`);
       const userRatingsQuery = query(ratingsRef, where("raterId", "==", user.uid));
-      const userRatingsSnapshot = await getDoc(userRatingsQuery as any);
+      const userRatingsSnapshot = await getDocs(userRatingsQuery);
       
       const ratedPhotoIds = new Set(userRatingsSnapshot.docs.map(doc => doc.data().ratedPhotoId));
       
