@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useLanguage } from "@/hooks/use-language";
 import { Button } from "@/components/ui/button";
 import {
@@ -10,11 +11,10 @@ import {
   DialogDescription,
   DialogFooter,
 } from "@/components/ui/dialog";
-import { useAuth } from "@/context/auth-provider";
 
 interface DisclaimerDialogProps {
   isOpen: boolean;
-  onAccept: () => void;
+  onAccept: () => Promise<void>;
 }
 
 export default function DisclaimerDialog({
@@ -22,7 +22,13 @@ export default function DisclaimerDialog({
   onAccept,
 }: DisclaimerDialogProps) {
   const { t } = useLanguage();
-  const { loading } = useAuth();
+  const [isAccepting, setIsAccepting] = useState(false);
+
+  const handleAccept = async () => {
+    setIsAccepting(true);
+    await onAccept();
+    // No need to set isAccepting back to false as the component will unmount
+  };
 
   return (
     <Dialog open={isOpen}>
@@ -34,8 +40,8 @@ export default function DisclaimerDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button onClick={onAccept} disabled={loading}>
-            {loading ? t.loading : t.acceptDisclaimer}
+          <Button onClick={handleAccept} disabled={isAccepting}>
+            {isAccepting ? t.loading : t.acceptDisclaimer}
           </Button>
         </DialogFooter>
       </DialogContent>
