@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState } from "react";
@@ -68,6 +69,9 @@ export default function ProfileView() {
       <Card>
         <CardHeader>
           <CardTitle>{t.myAccount}</CardTitle>
+          <CardDescription>
+            Gérez les informations de votre profil et votre adresse e-mail de connexion.
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
@@ -85,6 +89,9 @@ export default function ProfileView() {
       <Card>
         <CardHeader>
             <CardTitle>{t.changePassword}</CardTitle>
+            <CardDescription>
+                Mettez à jour votre mot de passe ici. Assurez-vous d'utiliser un mot de passe fort.
+            </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
             <div className="space-y-2">
