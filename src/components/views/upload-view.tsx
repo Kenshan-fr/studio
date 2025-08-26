@@ -37,7 +37,7 @@ type Photo = {
 
 
 export default function UploadView() {
-  const { user, profile, updateProfile } = useAuth();
+  const { user, profile, refreshProfile } = useAuth();
   const { t } = useLanguage();
   const { toast } = useToast();
 
@@ -61,6 +61,7 @@ export default function UploadView() {
     } else {
       setSelectedFile(null);
       setPreviewUrl(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
       if (file) {
         toast({ variant: "destructive", title: t.error, description: t.invalidImage });
       }
@@ -131,14 +132,10 @@ export default function UploadView() {
 
                 await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhoto);
                 
-                // We use a direct reference to the photo data to add to the user's subcollection
                 const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
                 await updateDoc(userDocRef, { uploadedPhotos: arrayUnion(newPhoto) });
                 
-                if (updateProfile && profile) {
-                  const currentPhotos = profile.uploadedPhotos || [];
-                  updateProfile({ ...profile, uploadedPhotos: [...currentPhotos, newPhoto] });
-                }
+                await refreshProfile();
 
                 toast({ title: t.uploadSuccess });
                 setSelectedFile(null);
@@ -172,11 +169,7 @@ export default function UploadView() {
         if (photoToRemove) {
           const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
           await updateDoc(userDocRef, { uploadedPhotos: arrayRemove(photoToRemove) });
-          
-          if (updateProfile) {
-            const updatedPhotos = profile.uploadedPhotos.filter((p: any) => p.photoId !== photoId);
-            updateProfile({ ...profile, uploadedPhotos: updatedPhotos });
-          }
+          await refreshProfile();
         }
         
         toast({ title: t.deleteSuccess });

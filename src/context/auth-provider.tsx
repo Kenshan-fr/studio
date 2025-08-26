@@ -25,7 +25,7 @@ interface AuthContextType {
   updateUserProfile: (data: Partial<UserProfile>) => Promise<void>;
   updateUserPassword: (newPass: string) => Promise<void>;
   acceptDisclaimer: () => Promise<void>;
-  updateProfile: (profile: UserProfile | null) => void;
+  refreshProfile: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -36,32 +36,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
+  const fetchProfile = async (user: User) => {
+    if (user && !user.isAnonymous) {
+      const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
+      const docSnap = await getDoc(userDocRef);
+      if (docSnap.exists()) {
+        setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
+      } else {
+        // This case is for sign-up, where the profile is created separately
+        setProfile(null); 
+      }
+    } else {
+      setProfile(null);
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
         setUser(user);
-        if (!user.isAnonymous) {
-          const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
-          const docSnap = await getDoc(userDocRef);
-          if (docSnap.exists()) {
-            setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
-          } else {
-            const newProfile: UserProfile = {
-              uid: user.uid,
-              username: `User_${user.uid.slice(0, 5)}`,
-              hasAcceptedDisclaimer: false,
-              uploadedPhotos: [],
-            };
-            await setDoc(userDocRef, newProfile);
-            setProfile(newProfile);
-          }
-        }
+        await fetchProfile(user);
         setLoading(false);
       } else {
-        // If no user, sign in anonymously
         signInAnonymously(auth).catch((error) => {
             console.error("Anonymous sign-in failed:", error);
-            // Still set loading to false to not block UI
             setLoading(false);
         });
         setUser(null);
@@ -69,18 +67,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     });
 
-    // If there is no user after a short delay, stop loading.
     const timer = setTimeout(() => {
-        if (loading) {
-            setLoading(false);
-        }
-    }, 1500); // 1.5 second timeout as a fallback
+        if (loading) setLoading(false);
+    }, 2500);
 
     return () => {
         unsubscribe();
         clearTimeout(timer);
     };
-}, []);
+  }, []);
   
   const signUp = async (email: string, pass: string, username: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
@@ -120,6 +115,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
      if (!user) return;
      await updateUserProfile({ hasAcceptedDisclaimer: true });
   }
+  
+  const refreshProfile = async () => {
+    if (user) {
+        await fetchProfile(user);
+    }
+  };
 
   const value: AuthContextType = {
     user,
@@ -131,7 +132,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     updateUserProfile,
     updateUserPassword,
     acceptDisclaimer,
-    updateProfile: setProfile,
+    refreshProfile,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
