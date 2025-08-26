@@ -25,7 +25,7 @@ const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 
 export default function RateView() {
   const { t } = useLanguage();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { toast } = useToast();
   
   const [photosToRate, setPhotosToRate] = useState<Photo[]>([]);
@@ -34,32 +34,37 @@ export default function RateView() {
   const [isImageLoading, setIsImageLoading] = useState(true);
 
   useEffect(() => {
-    if (!user) return;
-
+    if (!user || !profile) return;
+  
+    // Fetch photos not uploaded by the current user
     const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
-    // This query now correctly fetches photos not uploaded by the current user.
-    // We will rely on Firebase rules and logic to handle already-rated photos in a more scalable way if needed,
-    // rather than inefficient client-side filtering.
     const q = query(photosRef, where("uploaderId", "!=", user.uid), limit(20));
-
+  
     const unsubscribe = onSnapshot(q, async (snapshot) => {
-      const allPhotos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Photo));
+      let fetchedPhotos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Photo));
       
-      // In a real-world scenario at scale, filtering out already-rated photos should be done server-side.
-      // For this project, we'll keep the client-side logic simple and rely on not re-showing photos in the same session.
-      setPhotosToRate(allPhotos);
+      // Filter out photos the user has already rated
+      const ratingsRef = collection(db, `artifacts/${appId}/public/data/ratings`);
+      const userRatingsQuery = query(ratingsRef, where("raterId", "==", user.uid));
+      const userRatingsSnapshot = await getDoc(userRatingsQuery as any);
+      
+      const ratedPhotoIds = new Set(userRatingsSnapshot.docs.map(doc => doc.data().ratedPhotoId));
+      
+      fetchedPhotos = fetchedPhotos.filter(photo => !ratedPhotoIds.has(photo.id));
+
+      setPhotosToRate(fetchedPhotos);
       setCurrentPhotoIndex(0);
       setLoading(false);
       setIsImageLoading(true);
-
+  
     }, (error) => {
       console.error("Error fetching photos: ", error);
       toast({ variant: "destructive", title: t.error, description: t.errorPhotosFetch });
       setLoading(false);
     });
-
+  
     return () => unsubscribe();
-  }, [user, t.error, t.errorPhotosFetch, toast]);
+  }, [user, profile, t.error, t.errorPhotosFetch, toast]);
   
   const currentPhoto = photosToRate[currentPhotoIndex];
 
@@ -147,8 +152,8 @@ export default function RateView() {
         <CardFooter>
             <div className="grid grid-cols-5 gap-2 w-full">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map(score => (
-                    <Button key={score} onClick={() => handleRate(score)} className="aspect-square h-auto p-0 flex flex-col">
-                       <span className="text-lg font-bold">{score}</span>
+                    <Button key={score} onClick={() => handleRate(score)} className="aspect-square h-auto p-0 flex flex-col text-lg hover:bg-primary/80 transition-all duration-200 ease-in-out transform hover:scale-105">
+                       <span className="text-xl font-bold">{score}</span>
                        <span className="text-xs">⭐</span>
                     </Button>
                 ))}
