@@ -12,7 +12,6 @@ import UploadView from "@/components/views/upload-view";
 import RateView from "@/components/views/rate-view";
 import ProfileView from "@/components/views/profile-view";
 import DisclaimerDialog from "@/components/shared/disclaimer-dialog";
-import { Progress } from "@/components/ui/progress";
 
 type Page = "home" | "auth" | "upload" | "rate" | "profile";
 
@@ -20,16 +19,9 @@ export default function AppShell() {
   const { user, loading, profile, acceptDisclaimer } = useAuth();
   const { t } = useLanguage();
   const [currentPage, setCurrentPage] = useState<Page>("home");
-  const [loadingProgress, setLoadingProgress] = useState(0);
 
   useEffect(() => {
-    if (loading) {
-      const interval = setInterval(() => {
-        setLoadingProgress((prev) => Math.min(prev + 10, 90));
-      }, 300);
-      return () => clearInterval(interval);
-    } else {
-      setLoadingProgress(100);
+    if (!loading) {
       if (user && !user.isAnonymous) {
         setCurrentPage("rate");
       } else if (user && user.isAnonymous) {
@@ -47,7 +39,6 @@ export default function AppShell() {
       <div className="flex items-center justify-center min-h-screen">
         <div className="text-center w-full max-w-sm px-4">
           <p className="text-xl font-semibold mb-4">{t.loadingApp}</p>
-          <Progress value={loadingProgress} className="w-full" />
         </div>
       </div>
     );
