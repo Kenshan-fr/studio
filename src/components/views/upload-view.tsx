@@ -88,18 +88,22 @@ export default function UploadView() {
         const moderationResult = await moderateImage({ photoDataUri: dataUri });
         if (moderationResult.isExplicit) {
             toast({ variant: "destructive", title: t.error, description: t.explicitContentDetected });
+            setIsModerating(false);
             return;
         }
         if (moderationResult.hasWeapons) {
             toast({ variant: "destructive", title: t.error, description: t.weaponsDetected });
+            setIsModerating(false);
             return;
         }
         if (moderationResult.hasDrugs) {
             toast({ variant: "destructive", title: t.error, description: t.drugsDetected });
+            setIsModerating(false);
             return;
         }
 
         setIsUploading(true);
+        setIsModerating(false);
         const photoId = crypto.randomUUID();
         const storageRef = ref(storage, `artifacts/${appId}/public/images/${user.uid}/${photoId}_${selectedFile.name}`);
         const uploadTask = uploadBytesResumable(storageRef, selectedFile);
@@ -107,6 +111,7 @@ export default function UploadView() {
         uploadTask.on('state_changed', 
             (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
             (error) => {
+                console.error("Upload error:", error);
                 toast({ variant: "destructive", title: t.error, description: t.errorUpload });
                 setIsUploading(false);
             },
@@ -124,6 +129,8 @@ export default function UploadView() {
                 };
 
                 await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhoto);
+                
+                // We use a direct reference to the photo data to add to the user's subcollection
                 const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
                 await updateDoc(userDocRef, { uploadedPhotos: arrayUnion(newPhoto) });
                 
@@ -138,13 +145,15 @@ export default function UploadView() {
                 setDescription("");
                 if(fileInputRef.current) fileInputRef.current.value = "";
                 setIsUploading(false);
+                setUploadProgress(0);
             }
         );
 
     } catch (error) {
+        console.error("Moderation or upload preparation error:", error);
         toast({ variant: "destructive", title: t.error, description: t.errorUpload });
-    } finally {
         setIsModerating(false);
+        setIsUploading(false);
     }
   };
   
@@ -171,6 +180,7 @@ export default function UploadView() {
         
         toast({ title: t.deleteSuccess });
     } catch (error) {
+        console.error("Delete error:", error);
         toast({ variant: "destructive", title: t.error, description: t.errorDelete });
     } finally {
         setPhotoToDelete(null);
@@ -178,7 +188,7 @@ export default function UploadView() {
   };
 
   const isLoading = isModerating || isUploading || isGenerating;
-  const loadingText = isModerating ? t.moderatingImage : isGenerating ? t.generatingDescription : `${t.uploading} ${Math.round(uploadProgress)}%`;
+  const loadingText = isModerating ? t.moderatingImage : isGenerating ? t.generatingDescription : isUploading ? `${t.uploading} ${Math.round(uploadProgress)}%` : t.upload;
 
 
   return (
@@ -193,14 +203,14 @@ export default function UploadView() {
               <Image src={previewUrl} alt={t.previewAlt} fill className="object-contain" />
             </div>
           )}
-          <Input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} />
-          <Textarea placeholder={t.photoDescriptionPlaceholder} value={description} onChange={e => setDescription(e.target.value)} />
+          <Input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} disabled={isLoading} />
+          <Textarea placeholder={t.photoDescriptionPlaceholder} value={description} onChange={e => setDescription(e.target.value)} disabled={isLoading} />
           <Button onClick={handleGenerateDescription} disabled={!selectedFile || isLoading} className="w-full gap-2">
             <Sparkles className="h-4 w-4" />
             {isGenerating ? t.generatingDescription : t.generateAIDescription}
           </Button>
           <Button onClick={handleUpload} disabled={!selectedFile || isLoading} className="w-full">
-            {isLoading ? loadingText : t.upload}
+            {loadingText}
           </Button>
           {isUploading && <Progress value={uploadProgress} />}
         </CardContent>
@@ -236,7 +246,7 @@ export default function UploadView() {
         onOpenChange={(open) => !open && setPhotoToDelete(null)}
         onConfirm={handleDelete}
         title={t.delete}
-        description={`${t.confirmDelete} "${photoToDelete?.description || 'photo sans description'}"?`}
+        description={`${t.confirmDelete} "${photoToDelete?.description || 'photo'}"?`}
         confirmText={t.delete}
         cancelText={t.cancel}
        />
