@@ -229,8 +229,8 @@ export default function UploadView() {
                     <div key={photo.photoId} className="relative group aspect-square">
                         <Image src={photo.imageUrl} alt={photo.description || ""} fill className="object-cover rounded-lg" />
                         <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white">
-                           <p className="text-xs">{t.note}: {photo.averageRating?.toFixed(1) || 'N/A'}</p>
-                           <p className="text-xs">({photo.ratingCount} {t.votes})</p>
+                           <p className="text-xs">{t.note}: {photo.averageRating?.toFixed(1) || '0.0'}</p>
+                           <p className="text-xs">({photo.ratingCount} {photo.ratingCount === 1 ? 'vote' : t.votes})</p>
                            <Button variant="destructive" size="icon" className="mt-2 h-8 w-8" onClick={() => setPhotoToDelete(photo)}>
                                 <Trash2 className="h-4 w-4"/>
                            </Button>
