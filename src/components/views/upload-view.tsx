@@ -117,7 +117,8 @@ export default function UploadView() {
                 await updateDoc(userDocRef, { uploadedPhotos: arrayUnion(newPhoto) });
                 
                 if (updateProfile && profile) {
-                  updateProfile({ ...profile, uploadedPhotos: [...(profile.uploadedPhotos || []), newPhoto] });
+                  const currentPhotos = profile.uploadedPhotos || [];
+                  updateProfile({ ...profile, uploadedPhotos: [...currentPhotos, newPhoto] });
                 }
 
                 toast({ title: t.uploadSuccess });
