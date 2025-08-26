@@ -17,6 +17,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, Trash2 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 
@@ -224,20 +225,22 @@ export default function UploadView() {
             )}
         </CardHeader>
         <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                {profile?.uploadedPhotos?.map((photo) => (
-                    <div key={photo.photoId} className="relative group aspect-square">
-                        <Image src={photo.imageUrl} alt={photo.description || ""} fill className="object-cover rounded-lg" />
-                        <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white">
-                           <p className="text-xs">{t.note}: {photo.averageRating?.toFixed(1) || '0.0'}</p>
-                           <p className="text-xs">({photo.ratingCount} {photo.ratingCount === 1 ? 'vote' : t.votes})</p>
-                           <Button variant="destructive" size="icon" className="mt-2 h-8 w-8" onClick={() => setPhotoToDelete(photo)}>
-                                <Trash2 className="h-4 w-4"/>
-                           </Button>
+            <ScrollArea className="h-72 w-full">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
+                    {profile?.uploadedPhotos?.map((photo) => (
+                        <div key={photo.photoId} className="relative group aspect-square">
+                            <Image src={photo.imageUrl} alt={photo.description || ""} fill className="object-cover rounded-lg" />
+                            <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white">
+                               <p className="text-xs">{t.note}: {photo.averageRating?.toFixed(1) || '0.0'}</p>
+                               <p className="text-xs">({photo.ratingCount} {photo.ratingCount === 1 ? 'vote' : t.votes})</p>
+                               <Button variant="destructive" size="icon" className="mt-2 h-8 w-8" onClick={() => setPhotoToDelete(photo)}>
+                                    <Trash2 className="h-4 w-4"/>
+                               </Button>
+                            </div>
                         </div>
-                    </div>
-                ))}
-            </div>
+                    ))}
+                </div>
+            </ScrollArea>
         </CardContent>
       </Card>
       
