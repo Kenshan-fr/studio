@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fileToDataUri } from "@/lib/utils";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, setDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, updateDoc, arrayRemove, deleteDoc } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
@@ -109,9 +109,6 @@ export default function UploadView() {
                 };
 
                 await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhoto);
-                
-                const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
-                await updateDoc(userDocRef, { uploadedPhotos: arrayUnion(newPhoto) });
                 
                 await refreshProfile();
 
