@@ -24,6 +24,18 @@ import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 
+type Photo = {
+  photoId: string;
+  uploaderId: string;
+  imageUrl: string;
+  description?: string;
+  uploadTimestamp: Date;
+  averageRating: number;
+  ratingCount: number;
+  totalRatingSum: number;
+};
+
+
 export default function UploadView() {
   const { user, profile, updateProfile } = useAuth();
   const { t } = useLanguage();
@@ -37,7 +49,7 @@ export default function UploadView() {
   const [isModerating, setIsModerating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
-  const [photoToDelete, setPhotoToDelete] = useState<{photoId: string, imageUrl: string} | null>(null);
+  const [photoToDelete, setPhotoToDelete] = useState<Photo | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -101,7 +113,7 @@ export default function UploadView() {
             },
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                const newPhoto = {
+                const newPhoto: Photo = {
                     photoId,
                     uploaderId: user.uid,
                     imageUrl: downloadURL,
@@ -147,17 +159,13 @@ export default function UploadView() {
         await deleteObject(storageRef);
 
         const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
-        const userSnap = await getDoc(userDocRef);
-        if (userSnap.exists()) {
-            const currentPhotos = userSnap.data().uploadedPhotos || [];
-            const photoToRemove = currentPhotos.find((p: any) => p.photoId === photoId);
-            if (photoToRemove) {
-                await updateDoc(userDocRef, { uploadedPhotos: arrayRemove(photoToRemove) });
-                 if (updateProfile && profile) {
-                  updateProfile({ ...profile, uploadedPhotos: currentPhotos.filter((p: any) => p.photoId !== photoId) });
-                }
-            }
+        await updateDoc(userDocRef, { uploadedPhotos: arrayRemove(photoToDelete) });
+        
+        if (updateProfile && profile) {
+          const updatedPhotos = profile.uploadedPhotos.filter((p: any) => p.photoId !== photoId);
+          updateProfile({ ...profile, uploadedPhotos: updatedPhotos });
         }
+        
         toast({ title: t.deleteSuccess });
     } catch (error) {
         toast({ variant: "destructive", title: t.error, description: t.errorDelete });
