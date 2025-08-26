@@ -38,33 +38,49 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setLoading(true);
       if (user) {
         setUser(user);
-        const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
-        const docSnap = await getDoc(userDocRef);
-        if (docSnap.exists()) {
-          setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
-        } else if (!user.isAnonymous) {
-          // Create profile if it doesn't exist for a non-anonymous user
-           const newProfile: UserProfile = {
-            uid: user.uid,
-            username: `User_${user.uid.slice(0, 5)}`,
-            hasAcceptedDisclaimer: false,
-            uploadedPhotos: [],
-          };
-          await setDoc(userDocRef, newProfile);
-          setProfile(newProfile);
+        if (!user.isAnonymous) {
+          const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
+          const docSnap = await getDoc(userDocRef);
+          if (docSnap.exists()) {
+            setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
+          } else {
+            const newProfile: UserProfile = {
+              uid: user.uid,
+              username: `User_${user.uid.slice(0, 5)}`,
+              hasAcceptedDisclaimer: false,
+              uploadedPhotos: [],
+            };
+            await setDoc(userDocRef, newProfile);
+            setProfile(newProfile);
+          }
         }
+        setLoading(false);
       } else {
-        await signInAnonymously(auth).catch(console.error);
+        // If no user, sign in anonymously
+        signInAnonymously(auth).catch((error) => {
+            console.error("Anonymous sign-in failed:", error);
+            // Still set loading to false to not block UI
+            setLoading(false);
+        });
         setUser(null);
         setProfile(null);
       }
-      setLoading(false);
     });
-    return () => unsubscribe();
-  }, []);
+
+    // If there is no user after a short delay, stop loading.
+    const timer = setTimeout(() => {
+        if (loading) {
+            setLoading(false);
+        }
+    }, 1500); // 1.5 second timeout as a fallback
+
+    return () => {
+        unsubscribe();
+        clearTimeout(timer);
+    };
+}, []);
   
   const signUp = async (email: string, pass: string, username: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
