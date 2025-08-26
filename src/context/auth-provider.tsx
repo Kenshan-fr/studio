@@ -2,7 +2,7 @@
 
 import { createContext, useState, useEffect, useContext, type ReactNode } from "react";
 import { onAuthStateChanged, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, updatePassword, signInAnonymously, type User } from "firebase/auth";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore";
 import { auth, db } from "@/lib/firebase";
 import { useToast } from "@/hooks/use-toast";
 
@@ -40,10 +40,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (user && !user.isAnonymous) {
       const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
       const docSnap = await getDoc(userDocRef);
+      
       if (docSnap.exists()) {
-        setProfile({ uid: user.uid, ...docSnap.data() } as UserProfile);
+        const userProfileData = { uid: user.uid, ...docSnap.data() } as UserProfile;
+        
+        // Also fetch user's uploaded photos from the public collection
+        const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
+        const q = query(photosRef, where("uploaderId", "==", user.uid));
+        const photosSnapshot = await getDocs(q);
+        userProfileData.uploadedPhotos = photosSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+
+        setProfile(userProfileData);
       } else {
-        // This case is for sign-up, where the profile is created separately
         setProfile(null); 
       }
     } else {
@@ -56,37 +64,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (user) {
         setUser(user);
         await fetchProfile(user);
-        setLoading(false);
       } else {
-        signInAnonymously(auth).catch((error) => {
+        await signInAnonymously(auth).catch((error) => {
             console.error("Anonymous sign-in failed:", error);
-            setLoading(false);
         });
         setUser(null);
         setProfile(null);
       }
+      setLoading(false);
     });
 
-    const timer = setTimeout(() => {
-        if (loading) setLoading(false);
-    }, 2500);
-
-    return () => {
-        unsubscribe();
-        clearTimeout(timer);
-    };
+    return () => unsubscribe();
   }, []);
   
   const signUp = async (email: string, pass: string, username: string) => {
     const cred = await createUserWithEmailAndPassword(auth, email, pass);
-    const newProfile: UserProfile = {
-      uid: cred.user.uid,
+    const newProfile: Omit<UserProfile, 'uploadedPhotos' | 'uid'> = {
       username,
       hasAcceptedDisclaimer: false,
-      uploadedPhotos: [],
     };
     await setDoc(doc(db, `artifacts/${appId}/users/${cred.user.uid}/user_data`, cred.user.uid), newProfile);
-    setProfile(newProfile);
+    setProfile({ ...newProfile, uid: cred.user.uid, uploadedPhotos: [] });
   };
 
   const signIn = async (email: string, pass: string) => {
@@ -103,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
     await updateDoc(userDocRef, data);
-    setProfile(prev => prev ? {...prev, ...data} : null);
+    await refreshProfile();
   };
 
   const updateUserPassword = async (newPass: string) => {

@@ -8,7 +8,7 @@ import { useToast } from "@/hooks/use-toast";
 import { fileToDataUri } from "@/lib/utils";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, setDoc, updateDoc, arrayRemove, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, deleteDoc } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
@@ -20,11 +20,10 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, Trash2 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 
-
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 
 type Photo = {
-  photoId: string;
+  id: string; // Changed from photoId to id for consistency
   uploaderId: string;
   imageUrl: string;
   description?: string;
@@ -97,8 +96,9 @@ export default function UploadView() {
             },
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                const newPhoto: Photo = {
-                    photoId,
+                
+                // Simplified object for Firestore
+                const newPhotoData = {
                     uploaderId: user.uid,
                     imageUrl: downloadURL,
                     description,
@@ -108,7 +108,7 @@ export default function UploadView() {
                     totalRatingSum: 0,
                 };
 
-                await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhoto);
+                await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhotoData);
                 
                 await refreshProfile();
 
@@ -131,20 +131,14 @@ export default function UploadView() {
   
   const handleDelete = async () => {
     if (!photoToDelete || !user || !profile) return;
-    const { photoId, imageUrl } = photoToDelete;
+    const { id, imageUrl } = photoToDelete;
     
     try {
-        await deleteDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId));
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, id));
         const storageRef = ref(storage, imageUrl);
         await deleteObject(storageRef);
-
-        const photoToRemove = profile.uploadedPhotos.find((p: any) => p.photoId === photoId);
         
-        if (photoToRemove) {
-          const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
-          await updateDoc(userDocRef, { uploadedPhotos: arrayRemove(photoToRemove) });
-          await refreshProfile();
-        }
+        await refreshProfile();
         
         toast({ title: t.deleteSuccess });
     } catch (error) {
@@ -195,11 +189,11 @@ export default function UploadView() {
             <ScrollArea className="h-72 w-full">
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 p-1">
                     {profile?.uploadedPhotos?.map((photo) => (
-                        <div key={photo.photoId} className="relative group aspect-square">
+                        <div key={photo.id} className="relative group aspect-square">
                             <Image src={photo.imageUrl} alt={photo.description || ""} fill className="object-cover rounded-lg" />
                             <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center p-2 text-center text-white">
                                <p className="text-xs">{t.note}: {photo.averageRating?.toFixed(1) || '0.0'}</p>
-                               <p className="text-xs">({photo.ratingCount} {photo.ratingCount === 1 ? 'vote' : t.votes})</p>
+                               <p className="text-xs">({photo.ratingCount} {photo.ratingCount === 1 ? t.voteSingular : t.votes})</p>
                                <Button variant="destructive" size="icon" className="mt-2 h-8 w-8" onClick={() => setPhotoToDelete(photo)}>
                                     <Trash2 className="h-4 w-4"/>
                                </Button>
