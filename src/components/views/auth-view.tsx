@@ -20,6 +20,7 @@ import {
   FormMessage,
 } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { translations } from "@/lib/translations";
 
 type Page = "home" | "auth" | "upload" | "rate" | "profile";
 
@@ -30,7 +31,7 @@ interface AuthViewProps {
 export default function AuthView({ setCurrentPage }: AuthViewProps) {
   const [isSigningUp, setIsSigningUp] = useState(true);
   const { signUp, signIn, loading } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const { toast } = useToast();
 
   const formSchema = z.object({
@@ -44,11 +45,26 @@ export default function AuthView({ setCurrentPage }: AuthViewProps) {
     defaultValues: { username: "", email: "", password: "" },
   });
 
+  function getFirebaseErrorMessage(errorCode: string): string {
+    const errorMap = translations[language];
+    switch (errorCode) {
+      case 'auth/email-already-in-use':
+        return errorMap.errorEmailInUse;
+      case 'auth/invalid-credential':
+        return errorMap.errorInvalidCredentials;
+      case 'auth/weak-password':
+        return errorMap.errorWeakPassword;
+      default:
+        return errorMap.errorFirebaseAuth;
+    }
+  }
+  
+
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
       if (isSigningUp) {
         await signUp(values.email, values.password, values.username!);
-        toast({ title: t.signInSuccess });
+        toast({ title: translations[language].signUpSuccess || "Account created successfully!" });
         setCurrentPage("rate");
       } else {
         await signIn(values.email, values.password);
@@ -56,14 +72,7 @@ export default function AuthView({ setCurrentPage }: AuthViewProps) {
         setCurrentPage("rate");
       }
     } catch (error: any) {
-      let errorMessage = t.error;
-      if (error.code === 'auth/email-already-in-use') {
-        errorMessage = t.errorEmailInUse;
-      } else if (error.code === 'auth/invalid-credential') {
-        errorMessage = t.errorInvalidCredentials;
-      } else if (error.code) {
-        errorMessage = error.code;
-      }
+      const errorMessage = getFirebaseErrorMessage(error.code);
       toast({
         variant: "destructive",
         title: isSigningUp ? t.errorSignUp : t.errorSignIn,
