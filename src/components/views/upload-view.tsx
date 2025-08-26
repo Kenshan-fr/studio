@@ -9,7 +9,7 @@ import { fileToDataUri } from "@/lib/utils";
 import { moderateImage } from "@/ai/flows/moderate-image";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
-import { doc, setDoc, updateDoc, arrayUnion, getDoc, arrayRemove, deleteDoc } from "firebase/firestore";
+import { doc, setDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc } from "firebase/firestore";
 import { db, storage } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,6 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Sparkles, Trash2 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
 
@@ -150,7 +149,7 @@ export default function UploadView() {
   };
   
   const handleDelete = async () => {
-    if (!photoToDelete || !user) return;
+    if (!photoToDelete || !user || !profile) return;
     const { photoId, imageUrl } = photoToDelete;
     
     try {
@@ -158,12 +157,16 @@ export default function UploadView() {
         const storageRef = ref(storage, imageUrl);
         await deleteObject(storageRef);
 
-        const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
-        await updateDoc(userDocRef, { uploadedPhotos: arrayRemove(photoToDelete) });
+        const photoToRemove = profile.uploadedPhotos.find((p: any) => p.photoId === photoId);
         
-        if (updateProfile && profile) {
-          const updatedPhotos = profile.uploadedPhotos.filter((p: any) => p.photoId !== photoId);
-          updateProfile({ ...profile, uploadedPhotos: updatedPhotos });
+        if (photoToRemove) {
+          const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_data`, user.uid);
+          await updateDoc(userDocRef, { uploadedPhotos: arrayRemove(photoToRemove) });
+          
+          if (updateProfile) {
+            const updatedPhotos = profile.uploadedPhotos.filter((p: any) => p.photoId !== photoId);
+            updateProfile({ ...profile, uploadedPhotos: updatedPhotos });
+          }
         }
         
         toast({ title: t.deleteSuccess });
@@ -233,7 +236,7 @@ export default function UploadView() {
         onOpenChange={(open) => !open && setPhotoToDelete(null)}
         onConfirm={handleDelete}
         title={t.delete}
-        description={t.confirmDelete}
+        description={`${t.confirmDelete} "${photoToDelete?.description || 'photo sans description'}"?`}
         confirmText={t.delete}
         cancelText={t.cancel}
        />
