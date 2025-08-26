@@ -19,20 +19,9 @@ import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Sparkles, Trash2 } from "lucide-react";
 import { ConfirmationDialog } from "@/components/shared/confirmation-dialog";
+import type { Photo } from "@/types";
 
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
-
-type Photo = {
-  id: string; // Changed from photoId to id for consistency
-  uploaderId: string;
-  imageUrl: string;
-  description?: string;
-  uploadTimestamp: Date;
-  averageRating: number;
-  ratingCount: number;
-  totalRatingSum: number;
-};
-
 
 export default function UploadView() {
   const { user, profile, refreshProfile } = useAuth();
@@ -97,7 +86,6 @@ export default function UploadView() {
             async () => {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 
-                // Simplified object for Firestore
                 const newPhotoData = {
                     uploaderId: user.uid,
                     imageUrl: downloadURL,

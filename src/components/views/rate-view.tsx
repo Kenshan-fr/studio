@@ -11,15 +11,7 @@ import { db } from "@/lib/firebase";
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-
-type Photo = {
-  id: string;
-  uploaderId: string;
-  imageUrl: string;
-  description?: string;
-  averageRating: number;
-  ratingCount: number;
-};
+import type { Photo } from "@/types";
 
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 
