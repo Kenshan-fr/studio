@@ -58,7 +58,6 @@ export default function AuthView({ setCurrentPage }: AuthViewProps) {
         return errorMap.errorFirebaseAuth;
     }
   }
-  
 
   async function onSubmit(values: z.infer<typeof formSchema>) {
     try {
