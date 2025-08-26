@@ -6,7 +6,6 @@ import { useAuth } from "@/context/auth-provider";
 import { useLanguage } from "@/hooks/use-language";
 import { useToast } from "@/hooks/use-toast";
 import { fileToDataUri } from "@/lib/utils";
-import { moderateImage } from "@/ai/flows/moderate-image";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
 import { ref, uploadBytesResumable, getDownloadURL, deleteObject } from "firebase/storage";
 import { doc, setDoc, updateDoc, arrayUnion, arrayRemove, deleteDoc } from "firebase/firestore";
@@ -46,7 +45,6 @@ export default function UploadView() {
   const [description, setDescription] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [isModerating, setIsModerating] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   
   const [photoToDelete, setPhotoToDelete] = useState<Photo | null>(null);
@@ -84,28 +82,8 @@ export default function UploadView() {
 
   const handleUpload = async () => {
     if (!selectedFile || !user) return;
-    setIsModerating(true);
+    setIsUploading(true);
     try {
-        const dataUri = await fileToDataUri(selectedFile);
-        const moderationResult = await moderateImage({ photoDataUri: dataUri });
-        if (moderationResult.isExplicit) {
-            toast({ variant: "destructive", title: t.error, description: t.explicitContentDetected });
-            setIsModerating(false);
-            return;
-        }
-        if (moderationResult.hasWeapons) {
-            toast({ variant: "destructive", title: t.error, description: t.weaponsDetected });
-            setIsModerating(false);
-            return;
-        }
-        if (moderationResult.hasDrugs) {
-            toast({ variant: "destructive", title: t.error, description: t.drugsDetected });
-            setIsModerating(false);
-            return;
-        }
-
-        setIsUploading(true);
-        setIsModerating(false);
         const photoId = crypto.randomUUID();
         const storageRef = ref(storage, `artifacts/${appId}/public/images/${user.uid}/${photoId}_${selectedFile.name}`);
         const uploadTask = uploadBytesResumable(storageRef, selectedFile);
@@ -148,9 +126,8 @@ export default function UploadView() {
         );
 
     } catch (error) {
-        console.error("Moderation or upload preparation error:", error);
+        console.error("Upload preparation error:", error);
         toast({ variant: "destructive", title: t.error, description: t.errorUpload });
-        setIsModerating(false);
         setIsUploading(false);
     }
   };
@@ -181,8 +158,8 @@ export default function UploadView() {
     }
   };
 
-  const isLoading = isModerating || isUploading || isGenerating;
-  const loadingText = isModerating ? t.moderatingImage : isGenerating ? t.generatingDescription : isUploading ? `${t.uploading} ${Math.round(uploadProgress)}%` : t.upload;
+  const isLoading = isUploading || isGenerating;
+  const loadingText = isGenerating ? t.generatingDescription : isUploading ? `${t.uploading} ${Math.round(uploadProgress)}%` : t.upload;
 
 
   return (
