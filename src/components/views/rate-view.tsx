@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -28,6 +29,7 @@ export default function RateView() {
   useEffect(() => {
     if (!user || !profile) return;
   
+    setLoading(true);
     // Fetch photos not uploaded by the current user
     const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
     const q = query(photosRef, where("uploaderId", "!=", user.uid), limit(20));
@@ -102,6 +104,7 @@ export default function RateView() {
             setCurrentPhotoIndex(currentPhotoIndex + 1);
         } else {
             // Re-fetch or show "no more photos"
+            setLoading(true);
             setPhotosToRate([]);
         }
 
