@@ -1,7 +1,7 @@
+
 import type { Metadata } from 'next';
 import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
-import { AuthProvider } from '@/context/auth-provider';
 import { LanguageProvider } from '@/context/language-provider';
 import { ThemeProvider } from '@/context/theme-provider';
 
@@ -27,12 +27,10 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
-          <AuthProvider>
             <LanguageProvider>
               {children}
               <Toaster />
             </LanguageProvider>
-          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

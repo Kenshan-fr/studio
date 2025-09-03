@@ -1,11 +1,11 @@
+
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { Image as ImageIcon, Star, User } from "lucide-react";
-import { useLanguage } from "@/hooks/use-language";
+import { Image as ImageIcon, Star } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type Page = "home" | "auth" | "upload" | "rate" | "profile";
+type Page = "rate" | "upload";
 
 interface BottomNavProps {
   currentPage: Page;
@@ -26,7 +26,7 @@ const NavButton = ({
   <button
     onClick={onClick}
     className={cn(
-      "flex flex-col items-center py-1 px-2 rounded-lg text-white text-sm font-medium transition-colors duration-200",
+      "flex flex-col items-center py-1 px-2 rounded-lg text-white text-sm font-medium transition-colors duration-200 w-24",
       isActive ? "bg-primary/80" : "hover:bg-primary/90"
     )}
     aria-label={label}
@@ -37,23 +37,16 @@ const NavButton = ({
 );
 
 export default function BottomNav({ currentPage, setCurrentPage }: BottomNavProps) {
-  const { t } = useLanguage();
-
   const navItems = [
     {
-      page: "upload" as Page,
-      label: t.myPhotosUpload,
-      icon: ImageIcon,
-    },
-    {
       page: "rate" as Page,
-      label: t.ratePhotos,
+      label: "Noter",
       icon: Star,
     },
     {
-      page: "profile" as Page,
-      label: t.myAccount,
-      icon: User,
+      page: "upload" as Page,
+      label: "Télécharger",
+      icon: ImageIcon,
     },
   ];
 
