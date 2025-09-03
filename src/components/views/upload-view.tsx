@@ -35,6 +35,7 @@ export default function UploadView() {
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiDisabled, setAiDisabled] = useState(false);
   
   const [photoToDelete, setPhotoToDelete] = useState<Photo | null>(null);
 
@@ -62,8 +63,14 @@ export default function UploadView() {
       const dataUri = await fileToDataUri(selectedFile);
       const result = await generatePhotoDescription({ photoDataUri: dataUri });
       setDescription(result.description);
-    } catch (error) {
-        toast({ variant: "destructive", title: t.error, description: t.aiDescriptionError });
+    } catch (error: any) {
+        // Check for billing-related errors
+        if (error.message && error.message.includes('billing')) {
+            setAiDisabled(true);
+            toast({ variant: "destructive", title: "Fonctionnalité non disponible", description: "La génération IA nécessite un forfait payant." });
+        } else {
+            toast({ variant: "destructive", title: t.error, description: t.aiDescriptionError });
+        }
     } finally {
         setIsGenerating(false);
     }
@@ -73,21 +80,21 @@ export default function UploadView() {
     if (!selectedFile || !user) return;
     setIsUploading(true);
     setUploadProgress(0);
+
     const photoId = crypto.randomUUID();
+    const filePath = `artifacts/${appId}/public/images/${user.uid}/${photoId}_${selectedFile.name}`;
+    const storageRef = ref(storage, filePath);
+    const uploadTask = uploadBytesResumable(storageRef, selectedFile);
 
-    try {
-        const filePath = `artifacts/${appId}/public/images/${user.uid}/${photoId}_${selectedFile.name}`;
-        const storageRef = ref(storage, filePath);
-        const uploadTask = uploadBytesResumable(storageRef, selectedFile);
-
-        uploadTask.on('state_changed', 
-            (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-            (error) => {
-                console.error("Upload error:", error);
-                toast({ variant: "destructive", title: t.error, description: t.errorUpload });
-                setIsUploading(false);
-            },
-            async () => {
+    uploadTask.on('state_changed', 
+        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
+        (error) => {
+            console.error("Upload error:", error);
+            toast({ variant: "destructive", title: t.error, description: t.errorUpload });
+            setIsUploading(false);
+        },
+        async () => {
+            try {
                 const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
                 
                 const newPhotoData: Omit<Photo, 'id'> = {
@@ -111,14 +118,13 @@ export default function UploadView() {
                 if(fileInputRef.current) fileInputRef.current.value = "";
                 setIsUploading(false);
                 setUploadProgress(0);
+            } catch (dbError) {
+                 console.error("Database error:", dbError);
+                 toast({ variant: "destructive", title: t.error, description: "Erreur lors de l'enregistrement des données de la photo." });
+                 setIsUploading(false);
             }
-        );
-
-    } catch (error) {
-        console.error("Upload preparation error:", error);
-        toast({ variant: "destructive", title: t.error, description: t.errorUpload });
-        setIsUploading(false);
-    }
+        }
+    );
   };
   
   const handleDelete = async () => {
@@ -126,9 +132,11 @@ export default function UploadView() {
     const { id, imageUrl } = photoToDelete;
     
     try {
-        await deleteDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, id));
+        // The path in storage must be derived from the imageUrl
         const storageRef = ref(storage, imageUrl);
         await deleteObject(storageRef);
+        
+        await deleteDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, id));
         
         await refreshProfile();
         
@@ -144,7 +152,6 @@ export default function UploadView() {
   const isLoading = isUploading || isGenerating;
   const loadingText = isGenerating ? t.generatingDescription : isUploading ? `${t.uploading} ${Math.round(uploadProgress)}%` : t.upload;
 
-
   return (
     <div className="w-full max-w-2xl space-y-6">
       <Card>
@@ -159,7 +166,7 @@ export default function UploadView() {
           )}
           <Input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} disabled={isLoading} />
           <Textarea placeholder={t.photoDescriptionPlaceholder} value={description} onChange={e => setDescription(e.target.value)} disabled={isLoading} />
-          <Button onClick={handleGenerateDescription} disabled={!selectedFile || isLoading} className="w-full gap-2">
+          <Button onClick={handleGenerateDescription} disabled={!selectedFile || isLoading || aiDisabled} className="w-full gap-2">
             <Sparkles className="h-4 w-4" />
             {isGenerating ? t.generatingDescription : t.generateAIDescription}
           </Button>

@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "@/hooks/use-language";
 import { useToast } from "@/hooks/use-toast";
 import Image from "next/image";
@@ -26,39 +26,45 @@ export default function RateView() {
   const [loading, setLoading] = useState(true);
   const [isImageLoading, setIsImageLoading] = useState(true);
 
-  useEffect(() => {
-    if (!user || !profile) return;
-  
+  const fetchPhotos = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
+    
     // Fetch photos not uploaded by the current user
     const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
     const q = query(photosRef, where("uploaderId", "!=", user.uid), limit(20));
-  
-    const unsubscribe = onSnapshot(q, async (snapshot) => {
-      let fetchedPhotos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Photo));
-      
-      // Filter out photos the user has already rated
-      const ratingsRef = collection(db, `artifacts/${appId}/public/data/ratings`);
-      const userRatingsQuery = query(ratingsRef, where("raterId", "==", user.uid));
-      const userRatingsSnapshot = await getDocs(userRatingsQuery);
-      
-      const ratedPhotoIds = new Set(userRatingsSnapshot.docs.map(doc => doc.data().ratedPhotoId));
-      
-      fetchedPhotos = fetchedPhotos.filter(photo => !ratedPhotoIds.has(photo.id));
+    
+    try {
+        const snapshot = await getDocs(q);
+        let fetchedPhotos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Photo));
+        
+        // Filter out photos the user has already rated
+        const ratingsRef = collection(db, `artifacts/${appId}/public/data/ratings`);
+        const userRatingsQuery = query(ratingsRef, where("raterId", "==", user.uid));
+        const userRatingsSnapshot = await getDocs(userRatingsQuery);
+        
+        const ratedPhotoIds = new Set(userRatingsSnapshot.docs.map(doc => doc.data().ratedPhotoId));
+        
+        fetchedPhotos = fetchedPhotos.filter(photo => !ratedPhotoIds.has(photo.id));
 
-      setPhotosToRate(fetchedPhotos);
-      setCurrentPhotoIndex(0);
-      setLoading(false);
-      setIsImageLoading(true);
-  
-    }, (error) => {
-      console.error("Error fetching photos: ", error);
-      toast({ variant: "destructive", title: t.error, description: t.errorPhotosFetch });
-      setLoading(false);
-    });
-  
-    return () => unsubscribe();
-  }, [user, profile, t.error, t.errorPhotosFetch, toast]);
+        setPhotosToRate(fetchedPhotos);
+        setCurrentPhotoIndex(0);
+        setIsImageLoading(true);
+
+    } catch (error) {
+        console.error("Error fetching photos: ", error);
+        toast({ variant: "destructive", title: t.error, description: t.errorPhotosFetch });
+    } finally {
+        setLoading(false);
+    }
+  }, [user, t.error, t.errorPhotosFetch, toast]);
+
+
+  useEffect(() => {
+    if (user && profile) {
+      fetchPhotos();
+    }
+  }, [user, profile, fetchPhotos]);
   
   const currentPhoto = photosToRate[currentPhotoIndex];
 
@@ -66,7 +72,7 @@ export default function RateView() {
     if (currentPhoto) {
       setIsImageLoading(true);
     }
-  }, [currentPhoto]);
+  }, [currentPhotoIndex, currentPhoto]);
 
   const handleRate = async (score: number) => {
     if (!user || !currentPhoto) return;
@@ -103,9 +109,8 @@ export default function RateView() {
         if (currentPhotoIndex < photosToRate.length - 1) {
             setCurrentPhotoIndex(currentPhotoIndex + 1);
         } else {
-            // Re-fetch or show "no more photos"
-            setLoading(true);
-            setPhotosToRate([]);
+             // Reached the end of the list, refresh.
+            fetchPhotos();
         }
 
     } catch (error) {
@@ -126,6 +131,7 @@ export default function RateView() {
           <div className="relative w-full aspect-[3/4] rounded-lg overflow-hidden bg-muted">
             {isImageLoading && <Skeleton className="w-full h-full" />}
             <Image
+              key={currentPhoto.id} // Add key to force re-render on photo change
               src={currentPhoto.imageUrl}
               alt={currentPhoto.description || t.photoToRate}
               fill
@@ -143,7 +149,7 @@ export default function RateView() {
           <p>{t.noPhotosMessage}</p>
         )}
       </CardContent>
-      {currentPhoto && (
+      {!loading && currentPhoto && (
         <CardFooter>
             <div className="grid grid-cols-5 gap-2 w-full">
                 {Array.from({ length: 10 }, (_, i) => i + 1).map(score => (
