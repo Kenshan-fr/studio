@@ -30,26 +30,31 @@ export default function RateView() {
     if (!user) return;
     setLoading(true);
     
-    // Fetch photos not uploaded by the current user
-    const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
-    const q = query(photosRef, where("uploaderId", "!=", user.uid), limit(20));
-    
     try {
-        const snapshot = await getDocs(q);
-        let fetchedPhotos = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Photo));
+        // Fetch photos not uploaded by the current user
+        const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
+        const photosQuery = query(photosRef, where("uploaderId", "!=", user.uid), limit(20));
         
-        // Filter out photos the user has already rated
+        // Fetch photos the user has already rated
         const ratingsRef = collection(db, `artifacts/${appId}/public/data/ratings`);
         const userRatingsQuery = query(ratingsRef, where("raterId", "==", user.uid));
-        const userRatingsSnapshot = await getDocs(userRatingsQuery);
-        
+
+        const [photosSnapshot, userRatingsSnapshot] = await Promise.all([
+            getDocs(photosQuery),
+            getDocs(userRatingsQuery)
+        ]);
+
         const ratedPhotoIds = new Set(userRatingsSnapshot.docs.map(doc => doc.data().ratedPhotoId));
         
-        fetchedPhotos = fetchedPhotos.filter(photo => !ratedPhotoIds.has(photo.id));
+        const fetchedPhotos = photosSnapshot.docs
+            .map(doc => ({ id: doc.id, ...doc.data() } as Photo))
+            .filter(photo => !ratedPhotoIds.has(photo.id));
 
         setPhotosToRate(fetchedPhotos);
         setCurrentPhotoIndex(0);
-        setIsImageLoading(true);
+        if (fetchedPhotos.length > 0) {
+            setIsImageLoading(true);
+        }
 
     } catch (error) {
         console.error("Error fetching photos: ", error);
@@ -109,7 +114,8 @@ export default function RateView() {
         if (currentPhotoIndex < photosToRate.length - 1) {
             setCurrentPhotoIndex(currentPhotoIndex + 1);
         } else {
-             // Reached the end of the list, refresh.
+            // Reached the end of the list, refresh.
+            setPhotosToRate([]);
             fetchPhotos();
         }
 
