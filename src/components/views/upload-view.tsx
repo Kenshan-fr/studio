@@ -4,7 +4,7 @@
 import { useState, useRef } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
-import { fileToDataUri } from "@/lib/utils";
+import { compressImage } from "@/lib/utils";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
 import { doc, setDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -60,7 +60,7 @@ export default function UploadView() {
     if (!selectedFile) return;
     setIsGenerating(true);
     try {
-      const dataUri = await fileToDataUri(selectedFile);
+      const dataUri = await compressImage(selectedFile);
       const result = await generatePhotoDescription({ photoDataUri: dataUri });
       setDescription(result.description);
     } catch (error: any) {
@@ -68,6 +68,7 @@ export default function UploadView() {
             setAiDisabled(true);
             toast({ variant: "destructive", title: "Fonctionnalité non disponible", description: "La génération IA nécessite un forfait payant." });
         } else {
+            console.error(error);
             toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de la génération de la description IA." });
         }
     } finally {
@@ -84,9 +85,18 @@ export default function UploadView() {
         const photoId = doc(collection(db, `artifacts/${appId}/public/data/public_photos`)).id;
         
         setUploadProgress(33);
-        const imageDataUri = await fileToDataUri(selectedFile);
+        // Compress the image before uploading
+        const imageDataUri = await compressImage(selectedFile);
         setUploadProgress(66);
         
+        // Check size before attempting to upload
+        if (new Blob([imageDataUri]).size > 1048487) {
+            toast({ variant: "destructive", title: "Erreur", description: "Même après compression, l'image est trop volumineuse pour être enregistrée." });
+            setIsUploading(false);
+            setUploadProgress(0);
+            return;
+        }
+
         const newPhotoData: Omit<Photo, 'id'> = {
             uploaderId: "anonymous",
             imageDataUri: imageDataUri,
@@ -109,7 +119,7 @@ export default function UploadView() {
         if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (dbError) {
          console.error("Database error:", dbError);
-         toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement des données de la photo." });
+         toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement de la photo. Elle est peut-être trop volumineuse." });
     } finally {
          setIsUploading(false);
          setUploadProgress(0);
