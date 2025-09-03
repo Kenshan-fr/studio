@@ -15,33 +15,22 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import type { Photo } from "@/types";
 import { supabase } from "@/lib/supabase";
-
-const UPLOADED_PHOTOS_KEY = "supabase_uploadedPhotos";
+import { useAuth } from "@/context/auth-provider";
 
 export default function MyPhotosView() {
+  const { user } = useAuth();
   const [myPhotos, setMyPhotos] = useState<Photo[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const getUploadedPhotoIds = (): string[] => {
-    if (typeof window === "undefined") return [];
-    const uploaded = localStorage.getItem(UPLOADED_PHOTOS_KEY);
-    return uploaded ? JSON.parse(uploaded) : [];
-  };
-
   const fetchMyPhotos = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
-    const myPhotoIds = getUploadedPhotoIds();
-    if (myPhotoIds.length === 0) {
-      setMyPhotos([]);
-      setLoading(false);
-      return;
-    }
 
     try {
       const { data, error } = await supabase
         .from('photos')
         .select('*')
-        .in('id', myPhotoIds)
+        .eq('uploader_id', user.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
@@ -51,7 +40,7 @@ export default function MyPhotosView() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user]);
 
   useEffect(() => {
     fetchMyPhotos();
@@ -63,7 +52,7 @@ export default function MyPhotosView() {
         <CardHeader>
           <CardTitle>Mes Photos Téléversées</CardTitle>
           <CardDescription>
-            Voici les photos que vous avez téléversées depuis ce navigateur.
+            Voici les photos que vous avez téléversées avec ce compte.
           </CardDescription>
         </CardHeader>
       </Card>

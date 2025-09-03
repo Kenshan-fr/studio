@@ -4,6 +4,7 @@ import './globals.css';
 import { Toaster } from '@/components/ui/toaster';
 import { LanguageProvider } from '@/context/language-provider';
 import { ThemeProvider } from '@/context/theme-provider';
+import { AuthProvider } from '@/context/auth-provider';
 
 export const metadata: Metadata = {
   title: 'Surdice Rate',
@@ -27,10 +28,12 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
+          <AuthProvider>
             <LanguageProvider>
               {children}
               <Toaster />
             </LanguageProvider>
+          </AuthProvider>
         </ThemeProvider>
       </body>
     </html>

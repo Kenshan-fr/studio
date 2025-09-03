@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { compressImage } from "@/lib/utils";
@@ -13,30 +13,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles } from "lucide-react";
 import { supabase, BUCKET_NAME, getPhotoPublicUrl } from "@/lib/supabase";
-
-const UPLOADED_PHOTOS_KEY = "supabase_uploadedPhotos";
-
-const addUploadedPhotoId = (photoId: string) => {
-    if (typeof window === "undefined") return;
-    const uploaded = localStorage.getItem(UPLOADED_PHOTOS_KEY);
-    const uploadedIds = uploaded ? JSON.parse(uploaded) : [];
-    uploadedIds.push(photoId);
-    localStorage.setItem(UPLOADED_PHOTOS_KEY, JSON.stringify(uploadedIds));
-};
-
-// Generate a simple, anonymous user ID and store it
-const getUploaderId = (): string => {
-    if (typeof window === "undefined") return 'anonymous';
-    let uploaderId = localStorage.getItem('supabase_uploaderId');
-    if (!uploaderId) {
-        uploaderId = `anon_${new Date().getTime()}_${Math.random().toString(36).substring(2, 10)}`;
-        localStorage.setItem('supabase_uploaderId', uploaderId);
-    }
-    return uploaderId;
-};
+import { useAuth } from "@/context/auth-provider";
 
 export default function UploadView() {
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
@@ -45,13 +26,8 @@ export default function UploadView() {
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiDisabled, setAiDisabled] = useState(false);
-  const [uploaderId, setUploaderId] = useState<string>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    setUploaderId(getUploaderId());
-  }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -89,7 +65,10 @@ export default function UploadView() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile || !uploaderId) return;
+    if (!selectedFile || !user) {
+        toast({ variant: "destructive", title: "Erreur", description: "Vous devez être connecté et sélectionner un fichier." });
+        return;
+    };
     setIsUploading(true);
     setUploadProgress(0);
 
@@ -99,7 +78,7 @@ export default function UploadView() {
 
         setUploadProgress(33);
 
-        const fileName = `${uploaderId}/${Date.now()}_${selectedFile.name}`;
+        const fileName = `${user.id}/${Date.now()}_${selectedFile.name}`;
         const { error: uploadError } = await supabase.storage
             .from(BUCKET_NAME)
             .upload(fileName, compressedFile);
@@ -113,7 +92,7 @@ export default function UploadView() {
         const { data: photoData, error: dbError } = await supabase
             .from('photos')
             .insert({
-                uploader_id: uploaderId,
+                uploader_id: user.id,
                 image_url: publicUrl,
                 description,
                 average_rating: 0,
@@ -127,7 +106,6 @@ export default function UploadView() {
         if (!photoData) throw new Error("Failed to get photo ID from database.");
         
         setUploadProgress(100);
-        addUploadedPhotoId(photoData.id);
         
         toast({ title: "Photo téléversée avec succès !" });
         setSelectedFile(null);

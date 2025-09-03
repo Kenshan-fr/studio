@@ -1,6 +1,7 @@
+
 export type Photo = {
   id: string; // Will be a UUID from Supabase
-  uploader_id: string; // Stored anonymously in local storage
+  uploader_id: string; // Corresponds to the user's ID from supabase.auth.users
   image_url: string; // Public URL from Supabase Storage
   description?: string;
   created_at: string; // ISO 8601 timestamp
