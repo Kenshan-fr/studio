@@ -121,7 +121,7 @@ export default function RateView() {
             {isImageLoading && <Skeleton className="w-full h-full" />}
             <Image
               key={currentPhoto.id}
-              src={currentPhoto.imageUrl}
+              src={currentPhoto.imageDataUri}
               alt={currentPhoto.description || "Photo à noter"}
               fill
               className={`object-contain transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}

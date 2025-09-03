@@ -94,7 +94,7 @@ export default function MyPhotosView() {
               <CardContent className="p-0">
                 <div className="relative w-full aspect-[3/4]">
                   <Image
-                    src={photo.imageUrl}
+                    src={photo.imageDataUri}
                     alt={photo.description || "Photo téléversée"}
                     fill
                     className="object-cover"

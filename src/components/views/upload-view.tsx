@@ -6,9 +6,8 @@ import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { fileToDataUri } from "@/lib/utils";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage";
 import { doc, setDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db, storage } from "@/lib/firebase";
+import { db } from "@/lib/firebase";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +19,6 @@ import type { Photo } from "@/types";
 
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 const UPLOADED_PHOTOS_KEY = "uploadedPhotos";
-
 
 const addUploadedPhoto = (photoId: string) => {
     if (typeof window === "undefined") return;
@@ -82,50 +80,40 @@ export default function UploadView() {
     setIsUploading(true);
     setUploadProgress(0);
 
-    const photoId = doc(collection(db, `artifacts/${appId}/public/data/public_photos`)).id;
-    const filePath = `artifacts/${appId}/public/images/${photoId}_${selectedFile.name}`;
-    const storageRef = ref(storage, filePath);
-    const uploadTask = uploadBytesResumable(storageRef, selectedFile);
+    try {
+        const photoId = doc(collection(db, `artifacts/${appId}/public/data/public_photos`)).id;
+        
+        setUploadProgress(33);
+        const imageDataUri = await fileToDataUri(selectedFile);
+        setUploadProgress(66);
+        
+        const newPhotoData: Omit<Photo, 'id'> = {
+            uploaderId: "anonymous",
+            imageDataUri: imageDataUri,
+            description,
+            uploadTimestamp: serverTimestamp(),
+            averageRating: 0,
+            ratingCount: 0,
+            totalRatingSum: 0,
+        };
 
-    uploadTask.on('state_changed', 
-        (snapshot) => setUploadProgress((snapshot.bytesTransferred / snapshot.totalBytes) * 100),
-        (error) => {
-            console.error("Upload error:", error);
-            toast({ variant: "destructive", title: "Erreur", description: "Erreur lors du téléchargement de l'image." });
-            setIsUploading(false);
-        },
-        async () => {
-            try {
-                const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-                
-                const newPhotoData: Omit<Photo, 'id'> = {
-                    uploaderId: "anonymous",
-                    imageUrl: downloadURL,
-                    description,
-                    uploadTimestamp: serverTimestamp(),
-                    averageRating: 0,
-                    ratingCount: 0,
-                    totalRatingSum: 0,
-                };
+        await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhotoData);
+        setUploadProgress(100);
+        
+        addUploadedPhoto(photoId);
 
-                await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhotoData);
-                
-                addUploadedPhoto(photoId);
-
-                toast({ title: "Photo téléchargée avec succès !" });
-                setSelectedFile(null);
-                setPreviewUrl(null);
-                setDescription("");
-                if(fileInputRef.current) fileInputRef.current.value = "";
-            } catch (dbError) {
-                 console.error("Database error:", dbError);
-                 toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement des données de la photo." });
-            } finally {
-                 setIsUploading(false);
-                 setUploadProgress(0);
-            }
-        }
-    );
+        toast({ title: "Photo téléchargée avec succès !" });
+        setSelectedFile(null);
+        setPreviewUrl(null);
+        setDescription("");
+        if(fileInputRef.current) fileInputRef.current.value = "";
+    } catch (dbError) {
+         console.error("Database error:", dbError);
+         toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement des données de la photo." });
+    } finally {
+         setIsUploading(false);
+         setUploadProgress(0);
+    }
   };
 
   const isLoading = isUploading || isGenerating;
