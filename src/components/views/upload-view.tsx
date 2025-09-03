@@ -5,13 +5,11 @@ import { useState, useRef } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { compressImage } from "@/lib/utils";
-import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Sparkles } from "lucide-react";
 import { supabase, BUCKET_NAME, getPhotoPublicUrl } from "@/lib/supabase";
 import { useAuth } from "@/context/auth-provider";
 
@@ -24,8 +22,6 @@ export default function UploadView() {
   const [description, setDescription] = useState("");
   const [uploadProgress, setUploadProgress] = useState(0);
   const [isUploading, setIsUploading] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [aiDisabled, setAiDisabled] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -41,26 +37,6 @@ export default function UploadView() {
       if (file) {
         toast({ variant: "destructive", title: "Erreur", description: "Veuillez sélectionner un fichier image valide." });
       }
-    }
-  };
-  
-  const handleGenerateDescription = async () => {
-    if (!selectedFile) return;
-    setIsGenerating(true);
-    try {
-      const dataUri = await compressImage(selectedFile, 800); // Smaller compression for AI
-      const result = await generatePhotoDescription({ photoDataUri: dataUri });
-      setDescription(result.description);
-    } catch (error: any) {
-        if (error.message && (error.message.includes('billing') || error.message.includes('API key'))) {
-            setAiDisabled(true);
-            toast({ variant: "destructive", title: "Fonctionnalité non disponible", description: "La génération IA nécessite une connexion et un forfait payant." });
-        } else {
-            console.error(error);
-            toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de la génération de la description IA." });
-        }
-    } finally {
-        setIsGenerating(false);
     }
   };
 
@@ -124,8 +100,7 @@ export default function UploadView() {
     }
   };
 
-  const isLoading = isUploading || isGenerating;
-  const loadingText = isGenerating ? "Génération..." : isUploading ? `Téléversement ${Math.round(uploadProgress)}%` : "Envoyer la Photo";
+  const loadingText = isUploading ? `Téléversement ${Math.round(uploadProgress)}%` : "Envoyer la Photo";
 
   return (
     <div className="w-full max-w-2xl space-y-6">
@@ -139,13 +114,9 @@ export default function UploadView() {
               <Image src={previewUrl} alt="Aperçu de l'image sélectionnée" fill className="object-contain" />
             </div>
           )}
-          <Input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} disabled={isLoading} />
-          <Textarea placeholder="Ajoutez une description..." value={description} onChange={e => setDescription(e.target.value)} disabled={isLoading} />
-          <Button onClick={handleGenerateDescription} disabled={!selectedFile || isLoading || aiDisabled} className="w-full gap-2">
-            <Sparkles className="h-4 w-4" />
-            {isGenerating ? "Génération..." : "Générer une description IA"}
-          </Button>
-          <Button onClick={handleUpload} disabled={!selectedFile || isLoading} className="w-full">
+          <Input type="file" accept="image/*" onChange={handleFileChange} ref={fileInputRef} disabled={isUploading} />
+          <Textarea placeholder="Ajoutez une description..." value={description} onChange={e => setDescription(e.target.value)} disabled={isUploading} />
+          <Button onClick={handleUpload} disabled={!selectedFile || isUploading} className="w-full">
             {loadingText}
           </Button>
           {isUploading && <Progress value={uploadProgress} />}
