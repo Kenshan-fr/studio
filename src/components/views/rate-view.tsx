@@ -8,9 +8,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Photo } from "@/types";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/lib/supabase";
 
-const RATED_PHOTOS_KEY = "ratedPhotos";
-const ALL_PHOTOS_KEY = "allPhotos";
+const RATED_PHOTOS_KEY = "supabase_ratedPhotos";
 
 export default function RateView() {
   const [photosToRate, setPhotosToRate] = useState<Photo[]>([]);
@@ -32,40 +32,40 @@ export default function RateView() {
     localStorage.setItem(RATED_PHOTOS_KEY, JSON.stringify(Array.from(ratedPhotos)));
   };
 
-  const fetchPhotos = useCallback(() => {
+  const fetchPhotos = useCallback(async () => {
     setLoading(true);
-    if (typeof window === "undefined") {
-      setLoading(false);
-      return;
-    }
+    const ratedPhotoIds = Array.from(getRatedPhotos());
+    
     try {
-      const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
-      const allPhotos: Photo[] = allPhotosData ? JSON.parse(allPhotosData) : [];
-      
-      const ratedPhotoIds = getRatedPhotos();
-      
-      const unratedPhotos = allPhotos
-        .filter(photo => !ratedPhotoIds.has(photo.id))
-        .sort((a, b) => (new Date(b.uploadTimestamp).getTime() - new Date(a.uploadTimestamp).getTime())); // Newest first
+        let query = supabase
+            .from('photos')
+            .select('*')
+            .order('created_at', { ascending: false })
+            .limit(20);
 
-      setPhotosToRate(unratedPhotos);
-      setCurrentPhotoIndex(0);
-      if (unratedPhotos.length > 0) {
-        setIsImageLoading(true);
-      }
+        if (ratedPhotoIds.length > 0) {
+            query = query.not('id', 'in', `(${ratedPhotoIds.join(',')})`);
+        }
+      
+        const { data, error } = await query;
+
+        if (error) throw error;
+        
+        setPhotosToRate(data || []);
+        setCurrentPhotoIndex(0);
+        if ((data || []).length > 0) {
+            setIsImageLoading(true);
+        }
     } catch (error) {
-      console.error("Error fetching photos from local storage: ", error);
-      toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les photos depuis le stockage local." });
+        console.error("Error fetching photos from Supabase: ", error);
+        toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les photos." });
     } finally {
-      setLoading(false);
+        setLoading(false);
     }
   }, [toast]);
 
   useEffect(() => {
     fetchPhotos();
-    const handleStorageChange = () => fetchPhotos();
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchPhotos]);
   
   const currentPhoto = photosToRate[currentPhotoIndex];
@@ -77,43 +77,29 @@ export default function RateView() {
   }, [currentPhotoIndex, currentPhoto]);
 
   const handleRate = async (score: number) => {
-    if (!currentPhoto || typeof window === "undefined") return;
+    if (!currentPhoto) return;
     
     addRatedPhoto(currentPhoto.id);
 
     try {
-      const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
-      let allPhotos: Photo[] = allPhotosData ? JSON.parse(allPhotosData) : [];
+        // Use an RPC function in Supabase to handle the rating atomically
+        const { error } = await supabase.rpc('rate_photo', {
+            photo_id: currentPhoto.id,
+            rating_value: score
+        });
 
-      const photoIndex = allPhotos.findIndex(p => p.id === currentPhoto.id);
-      if (photoIndex === -1) throw new Error("Photo not found in local storage");
-
-      const photoToUpdate = allPhotos[photoIndex];
-      const newRatingCount = (photoToUpdate.ratingCount || 0) + 1;
-      const newTotalRatingSum = (photoToUpdate.totalRatingSum || 0) + score;
-      const newAverageRating = newTotalRatingSum / newRatingCount;
-
-      allPhotos[photoIndex] = {
-        ...photoToUpdate,
-        ratingCount: newRatingCount,
-        totalRatingSum: newTotalRatingSum,
-        averageRating: newAverageRating
-      };
+        if (error) throw error;
       
-      localStorage.setItem(ALL_PHOTOS_KEY, JSON.stringify(allPhotos));
-      
-      // Dispatch a storage event to notify other components
-      window.dispatchEvent(new Event('storage'));
+        toast({ title: `Vous avez noté cette photo ${score}/10 !` });
 
-      toast({ title: `Vous avez noté cette photo ${score}/10 !` });
-
-      if (currentPhotoIndex < photosToRate.length - 1) {
-        setCurrentPhotoIndex(currentPhotoIndex + 1);
-      } else {
-        setPhotosToRate([]); // You've rated all available photos
-      }
-    } catch (error) {
-      toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement de votre note." });
+        if (currentPhotoIndex < photosToRate.length - 1) {
+            setCurrentPhotoIndex(currentPhotoIndex + 1);
+        } else {
+            // Refetch or show a message
+            fetchPhotos();
+        }
+    } catch (error: any) {
+        toast({ variant: "destructive", title: "Erreur", description: error.message || "Erreur lors de l'enregistrement de votre note." });
     }
   };
 
@@ -130,7 +116,7 @@ export default function RateView() {
             {isImageLoading && <Skeleton className="w-full h-full" />}
             <Image
               key={currentPhoto.id}
-              src={currentPhoto.imageDataUri}
+              src={currentPhoto.image_url}
               alt={currentPhoto.description || "Photo à noter"}
               fill
               className={`object-contain transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}

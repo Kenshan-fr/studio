@@ -1,7 +1,7 @@
 
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { compressImage } from "@/lib/utils";
@@ -12,10 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Sparkles } from "lucide-react";
-import type { Photo } from "@/types";
+import { supabase, BUCKET_NAME, getPhotoPublicUrl } from "@/lib/supabase";
 
-const UPLOADED_PHOTOS_KEY = "uploadedPhotos";
-const ALL_PHOTOS_KEY = "allPhotos";
+const UPLOADED_PHOTOS_KEY = "supabase_uploadedPhotos";
 
 const addUploadedPhotoId = (photoId: string) => {
     if (typeof window === "undefined") return;
@@ -25,16 +24,16 @@ const addUploadedPhotoId = (photoId: string) => {
     localStorage.setItem(UPLOADED_PHOTOS_KEY, JSON.stringify(uploadedIds));
 };
 
-const savePhotoToLocal = (photo: Photo) => {
-    if (typeof window === "undefined") return;
-    const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
-    const allPhotos = allPhotosData ? JSON.parse(allPhotosData) : [];
-    allPhotos.push(photo);
-    localStorage.setItem(ALL_PHOTOS_KEY, JSON.stringify(allPhotos));
-    addUploadedPhotoId(photo.id);
-    // Dispatch a storage event to notify other components (like RateView) of new data
-    window.dispatchEvent(new Event('storage'));
-}
+// Generate a simple, anonymous user ID and store it
+const getUploaderId = (): string => {
+    if (typeof window === "undefined") return 'anonymous';
+    let uploaderId = localStorage.getItem('supabase_uploaderId');
+    if (!uploaderId) {
+        uploaderId = `anon_${new Date().getTime()}_${Math.random().toString(36).substring(2, 10)}`;
+        localStorage.setItem('supabase_uploaderId', uploaderId);
+    }
+    return uploaderId;
+};
 
 export default function UploadView() {
   const { toast } = useToast();
@@ -46,8 +45,13 @@ export default function UploadView() {
   const [isUploading, setIsUploading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [aiDisabled, setAiDisabled] = useState(false);
+  const [uploaderId, setUploaderId] = useState<string>('');
   
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    setUploaderId(getUploaderId());
+  }, []);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -68,7 +72,7 @@ export default function UploadView() {
     if (!selectedFile) return;
     setIsGenerating(true);
     try {
-      const dataUri = await compressImage(selectedFile);
+      const dataUri = await compressImage(selectedFile, 800); // Smaller compression for AI
       const result = await generatePhotoDescription({ photoDataUri: dataUri });
       setDescription(result.description);
     } catch (error: any) {
@@ -85,44 +89,54 @@ export default function UploadView() {
   };
 
   const handleUpload = async () => {
-    if (!selectedFile) return;
+    if (!selectedFile || !uploaderId) return;
     setIsUploading(true);
     setUploadProgress(0);
 
     try {
+        const compressedFile = await compressImage(selectedFile, 1080, 'file');
+        if (!compressedFile) throw new Error("Compression failed");
+
         setUploadProgress(33);
-        const imageDataUri = await compressImage(selectedFile);
+
+        const fileName = `${uploaderId}/${Date.now()}_${selectedFile.name}`;
+        const { error: uploadError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .upload(fileName, compressedFile);
+
+        if (uploadError) throw uploadError;
+
         setUploadProgress(66);
         
-        if (new Blob([imageDataUri]).size > 1048487) {
-            toast({ variant: "destructive", title: "Erreur", description: "Même après compression, l'image est trop volumineuse pour être enregistrée." });
-            setIsUploading(false);
-            setUploadProgress(0);
-            return;
-        }
+        const publicUrl = getPhotoPublicUrl(fileName);
 
-        const newPhoto: Photo = {
-            id: `local_${new Date().getTime()}_${Math.random()}`, // Unique local ID
-            uploaderId: "local_user",
-            imageDataUri: imageDataUri,
-            description,
-            uploadTimestamp: new Date().toISOString(),
-            averageRating: 0,
-            ratingCount: 0,
-            totalRatingSum: 0,
-        };
+        const { data: photoData, error: dbError } = await supabase
+            .from('photos')
+            .insert({
+                uploader_id: uploaderId,
+                image_url: publicUrl,
+                description,
+                average_rating: 0,
+                rating_count: 0,
+                total_rating_sum: 0,
+            })
+            .select('id')
+            .single();
+
+        if (dbError) throw dbError;
+        if (!photoData) throw new Error("Failed to get photo ID from database.");
         
-        savePhotoToLocal(newPhoto);
         setUploadProgress(100);
+        addUploadedPhotoId(photoData.id);
         
-        toast({ title: "Photo enregistrée localement !" });
+        toast({ title: "Photo téléversée avec succès !" });
         setSelectedFile(null);
         setPreviewUrl(null);
         setDescription("");
         if(fileInputRef.current) fileInputRef.current.value = "";
-    } catch (localError) {
-         console.error("Local save error:", localError);
-         toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement local de la photo." });
+    } catch (error: any) {
+         console.error("Supabase upload error:", error);
+         toast({ variant: "destructive", title: "Erreur", description: error.message || "Erreur lors du téléversement de la photo." });
     } finally {
          setIsUploading(false);
          setUploadProgress(0);
@@ -130,7 +144,7 @@ export default function UploadView() {
   };
 
   const isLoading = isUploading || isGenerating;
-  const loadingText = isGenerating ? "Génération..." : isUploading ? `Enregistrement ${Math.round(uploadProgress)}%` : "Enregistrer la Photo";
+  const loadingText = isGenerating ? "Génération..." : isUploading ? `Téléversement ${Math.round(uploadProgress)}%` : "Envoyer la Photo";
 
   return (
     <div className="w-full max-w-2xl space-y-6">

@@ -16,7 +16,7 @@ export function fileToDataUri(file: File): Promise<string> {
   });
 }
 
-export function compressImage(file: File, maxWidth: number = 1080): Promise<string> {
+export function compressImage(file: File, maxWidth: number = 1080, outputType: 'dataUri' | 'file' = 'dataUri'): Promise<string | File | null> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
@@ -39,9 +39,22 @@ export function compressImage(file: File, maxWidth: number = 1080): Promise<stri
         
         ctx.drawImage(img, 0, 0, width, height);
         
-        // Convert to JPEG with quality 0.85
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
-        resolve(dataUrl);
+        if (outputType === 'dataUri') {
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            resolve(dataUrl);
+        } else {
+            canvas.toBlob((blob) => {
+                if (blob) {
+                    const compressedFile = new File([blob], file.name, {
+                        type: 'image/jpeg',
+                        lastModified: Date.now()
+                    });
+                    resolve(compressedFile);
+                } else {
+                    reject(new Error('Canvas to Blob conversion failed'));
+                }
+            }, 'image/jpeg', 0.85);
+        }
       };
       img.onerror = (error) => reject(error);
     };

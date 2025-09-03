@@ -14,8 +14,9 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import type { Photo } from "@/types";
+import { supabase } from "@/lib/supabase";
 
-const ALL_PHOTOS_KEY = "allPhotos";
+const UPLOADED_PHOTOS_KEY = "supabase_uploadedPhotos";
 
 export default function MyPhotosView() {
   const [myPhotos, setMyPhotos] = useState<Photo[]>([]);
@@ -23,31 +24,30 @@ export default function MyPhotosView() {
 
   const getUploadedPhotoIds = (): string[] => {
     if (typeof window === "undefined") return [];
-    const uploaded = localStorage.getItem("uploadedPhotos");
+    const uploaded = localStorage.getItem(UPLOADED_PHOTOS_KEY);
     return uploaded ? JSON.parse(uploaded) : [];
   };
 
-  const fetchMyPhotos = useCallback(() => {
+  const fetchMyPhotos = useCallback(async () => {
     setLoading(true);
-    if (typeof window === "undefined") return;
+    const myPhotoIds = getUploadedPhotoIds();
+    if (myPhotoIds.length === 0) {
+      setMyPhotos([]);
+      setLoading(false);
+      return;
+    }
 
     try {
-      const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
-      const allPhotos: Photo[] = allPhotosData ? JSON.parse(allPhotosData) : [];
-      const myPhotoIds = new Set(getUploadedPhotoIds());
+      const { data, error } = await supabase
+        .from('photos')
+        .select('*')
+        .in('id', myPhotoIds)
+        .order('created_at', { ascending: false });
 
-      const filteredPhotos = allPhotos.filter(p => myPhotoIds.has(p.id));
-
-      // Sort by upload timestamp descending
-      filteredPhotos.sort((a, b) => {
-        const timestampA = a.uploadTimestamp ? new Date(a.uploadTimestamp).getTime() : 0;
-        const timestampB = b.uploadTimestamp ? new Date(b.uploadTimestamp).getTime() : 0;
-        return timestampB - timestampA;
-      });
-
-      setMyPhotos(filteredPhotos);
+      if (error) throw error;
+      setMyPhotos(data || []);
     } catch (error) {
-      console.error("Error fetching my photos from local storage:", error);
+      console.error("Error fetching my photos from Supabase:", error);
     } finally {
       setLoading(false);
     }
@@ -55,10 +55,6 @@ export default function MyPhotosView() {
 
   useEffect(() => {
     fetchMyPhotos();
-    // Listen for storage changes to update the view
-    const handleStorageChange = () => fetchMyPhotos();
-    window.addEventListener('storage', handleStorageChange);
-    return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchMyPhotos]);
 
   return (
@@ -84,7 +80,7 @@ export default function MyPhotosView() {
               <CardContent className="p-0">
                 <div className="relative w-full aspect-[3/4]">
                   <Image
-                    src={photo.imageDataUri}
+                    src={photo.image_url}
                     alt={photo.description || "Photo téléversée"}
                     fill
                     className="object-cover"
@@ -98,10 +94,10 @@ export default function MyPhotosView() {
                 </p>
                 <div className="flex justify-between w-full">
                   <Badge variant="secondary">
-                    Note: {photo.averageRating ? photo.averageRating.toFixed(2) : '0.00'} / 10
+                    Note: {photo.average_rating ? photo.average_rating.toFixed(2) : '0.00'} / 10
                   </Badge>
                   <Badge variant="outline">
-                    {photo.ratingCount || 0} vote{photo.ratingCount !== 1 ? "s" : ""}
+                    {photo.rating_count || 0} vote{photo.rating_count !== 1 ? "s" : ""}
                   </Badge>
                 </div>
               </CardFooter>
