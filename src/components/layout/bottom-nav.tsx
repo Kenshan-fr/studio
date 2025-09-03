@@ -2,10 +2,9 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { Image as ImageIcon, Star } from "lucide-react";
+import { Image as ImageIcon, Star, User } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type Page = "rate" | "upload";
+import type { Page } from "@/components/app-shell";
 
 interface BottomNavProps {
   currentPage: Page;
@@ -48,6 +47,11 @@ export default function BottomNav({ currentPage, setCurrentPage }: BottomNavProp
       label: "Télécharger",
       icon: ImageIcon,
     },
+    {
+      page: "my-photos" as Page,
+      label: "Mes Photos",
+      icon: User,
+    }
   ];
 
   return (

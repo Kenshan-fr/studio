@@ -6,8 +6,9 @@ import Header from "@/components/layout/header";
 import BottomNav from "@/components/layout/bottom-nav";
 import UploadView from "@/components/views/upload-view";
 import RateView from "@/components/views/rate-view";
+import MyPhotosView from "@/components/views/my-photos-view";
 
-type Page = "rate" | "upload";
+export type Page = "rate" | "upload" | "my-photos";
 
 export default function AppShell() {
   const [currentPage, setCurrentPage] = useState<Page>("rate");
@@ -18,6 +19,8 @@ export default function AppShell() {
         return <UploadView />;
       case "rate":
         return <RateView />;
+      case "my-photos":
+        return <MyPhotosView />;
       default:
         return <RateView />;
     }

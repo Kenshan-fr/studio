@@ -19,6 +19,16 @@ import { Sparkles } from "lucide-react";
 import type { Photo } from "@/types";
 
 const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
+const UPLOADED_PHOTOS_KEY = "uploadedPhotos";
+
+
+const addUploadedPhoto = (photoId: string) => {
+    if (typeof window === "undefined") return;
+    const uploaded = localStorage.getItem(UPLOADED_PHOTOS_KEY);
+    const uploadedIds = uploaded ? JSON.parse(uploaded) : [];
+    uploadedIds.push(photoId);
+    localStorage.setItem(UPLOADED_PHOTOS_KEY, JSON.stringify(uploadedIds));
+};
 
 export default function UploadView() {
   const { toast } = useToast();
@@ -100,6 +110,8 @@ export default function UploadView() {
 
                 await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhotoData);
                 
+                addUploadedPhoto(photoId);
+
                 toast({ title: "Photo téléchargée avec succès !" });
                 setSelectedFile(null);
                 setPreviewUrl(null);
