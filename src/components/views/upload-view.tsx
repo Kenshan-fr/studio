@@ -74,7 +74,7 @@ export default function UploadView() {
 
     try {
         const compressedFile = await compressImage(selectedFile, 1080, 'file');
-        if (!compressedFile) throw new Error("Compression failed");
+        if (!compressedFile) throw new Error("La compression de l'image a échoué.");
 
         setUploadProgress(33);
 
@@ -89,7 +89,7 @@ export default function UploadView() {
         
         const publicUrl = getPhotoPublicUrl(fileName);
 
-        const { data: photoData, error: dbError } = await supabase
+        const { error: dbError } = await supabase
             .from('photos')
             .insert({
                 uploader_id: user.id,
@@ -98,12 +98,9 @@ export default function UploadView() {
                 average_rating: 0,
                 rating_count: 0,
                 total_rating_sum: 0,
-            })
-            .select('id')
-            .single();
+            });
 
         if (dbError) throw dbError;
-        if (!photoData) throw new Error("Failed to get photo ID from database.");
         
         setUploadProgress(100);
         
@@ -114,7 +111,13 @@ export default function UploadView() {
         if(fileInputRef.current) fileInputRef.current.value = "";
     } catch (error: any) {
          console.error("Supabase upload error:", error);
-         toast({ variant: "destructive", title: "Erreur", description: error.message || "Erreur lors du téléversement de la photo." });
+         let errorMessage = "Erreur lors du téléversement de la photo.";
+         if (error.message && error.message.includes('security policy')) {
+           errorMessage = "Erreur de permission. Veuillez vérifier les politiques de sécurité de votre bucket Supabase.";
+         } else if (error.message) {
+           errorMessage = error.message;
+         }
+         toast({ variant: "destructive", title: "Erreur", description: errorMessage });
     } finally {
          setIsUploading(false);
          setUploadProgress(0);
