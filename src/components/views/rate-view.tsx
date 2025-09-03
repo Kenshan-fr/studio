@@ -9,10 +9,12 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { Photo } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/lib/supabase";
+import { useAuth } from "@/context/auth-provider";
 
 const RATED_PHOTOS_KEY = "supabase_ratedPhotos";
 
 export default function RateView() {
+  const { user } = useAuth();
   const [photosToRate, setPhotosToRate] = useState<Photo[]>([]);
   const [currentPhotoIndex, setCurrentPhotoIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -33,6 +35,7 @@ export default function RateView() {
   };
 
   const fetchPhotos = useCallback(async () => {
+    if (!user) return;
     setLoading(true);
     const ratedPhotoIds = Array.from(getRatedPhotos());
     
@@ -40,6 +43,7 @@ export default function RateView() {
         let query = supabase
             .from('photos')
             .select('*')
+            .not('uploader_id', 'eq', user.id) // Ne pas charger les photos de l'utilisateur actuel
             .order('created_at', { ascending: false })
             .limit(20);
 
@@ -53,28 +57,28 @@ export default function RateView() {
         
         setPhotosToRate(data || []);
         setCurrentPhotoIndex(0);
-        if ((data || []).length > 0) {
-            setIsImageLoading(true);
-        }
+        setIsImageLoading(true); // Réinitialiser l'état de chargement pour la nouvelle image
     } catch (error) {
         console.error("Error fetching photos from Supabase: ", error);
         toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les photos." });
     } finally {
         setLoading(false);
     }
-  }, [toast]);
+  }, [user, toast]);
 
   useEffect(() => {
-    fetchPhotos();
-  }, [fetchPhotos]);
+    if (user) {
+      fetchPhotos();
+    }
+  }, [user, fetchPhotos]);
   
-  const currentPhoto = photosToRate[currentPhotoIndex];
+  const currentPhoto = photosToRate.length > 0 ? photosToRate[currentPhotoIndex] : null;
 
   useEffect(() => {
     if (currentPhoto) {
       setIsImageLoading(true);
     }
-  }, [currentPhotoIndex, currentPhoto]);
+  }, [currentPhoto]);
 
   const handleRate = async (score: number) => {
     if (!currentPhoto) return;
@@ -82,7 +86,6 @@ export default function RateView() {
     addRatedPhoto(currentPhoto.id);
 
     try {
-        // Use an RPC function in Supabase to handle the rating atomically
         const { error } = await supabase.rpc('rate_photo', {
             photo_id: currentPhoto.id,
             rating_value: score
@@ -95,7 +98,6 @@ export default function RateView() {
         if (currentPhotoIndex < photosToRate.length - 1) {
             setCurrentPhotoIndex(currentPhotoIndex + 1);
         } else {
-            // Refetch or show a message
             fetchPhotos();
         }
     } catch (error: any) {
@@ -122,6 +124,7 @@ export default function RateView() {
               className={`object-contain transition-opacity duration-300 ${isImageLoading ? 'opacity-0' : 'opacity-100'}`}
               onLoad={() => setIsImageLoading(false)}
               sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+              priority={true}
             />
             {currentPhoto.description && (
               <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent p-4">
