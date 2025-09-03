@@ -2,12 +2,12 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 
 // --- VOS CLÉS SUPABASE SONT À METTRE ICI ---
 // Allez dans votre projet Supabase > Project Settings > API pour les trouver.
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "VOTRE_URL_SUPABASE";
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || "https://srpdyatoxfdgdyahyewo.supabase.co";
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "VOTRE_CLE_ANON_SUPABASE";
 
 let supabase: SupabaseClient;
 
-if (supabaseUrl === "VOTRE_URL_SUPABASE" || supabaseAnonKey === "VOTRE_CLE_ANON_SUPABASE") {
+if (supabaseUrl === "https://srpdyatoxfdgdyahyewo.supabase.co" || supabaseAnonKey === "VOTRE_CLE_ANON_SUPABASE") {
     console.warn("****************************************************************");
     console.warn("ATTENTION: Les clés Supabase ne sont pas configurées.");
     console.warn("Veuillez mettre à jour le fichier src/lib/supabase.ts");
