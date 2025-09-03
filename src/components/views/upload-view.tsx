@@ -6,9 +6,6 @@ import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
 import { compressImage } from "@/lib/utils";
 import { generatePhotoDescription } from "@/ai/flows/generate-photo-description";
-import { doc, setDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -17,16 +14,27 @@ import { Progress } from "@/components/ui/progress";
 import { Sparkles } from "lucide-react";
 import type { Photo } from "@/types";
 
-const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 const UPLOADED_PHOTOS_KEY = "uploadedPhotos";
+const ALL_PHOTOS_KEY = "allPhotos";
 
-const addUploadedPhoto = (photoId: string) => {
+const addUploadedPhotoId = (photoId: string) => {
     if (typeof window === "undefined") return;
     const uploaded = localStorage.getItem(UPLOADED_PHOTOS_KEY);
     const uploadedIds = uploaded ? JSON.parse(uploaded) : [];
     uploadedIds.push(photoId);
     localStorage.setItem(UPLOADED_PHOTOS_KEY, JSON.stringify(uploadedIds));
 };
+
+const savePhotoToLocal = (photo: Photo) => {
+    if (typeof window === "undefined") return;
+    const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
+    const allPhotos = allPhotosData ? JSON.parse(allPhotosData) : [];
+    allPhotos.push(photo);
+    localStorage.setItem(ALL_PHOTOS_KEY, JSON.stringify(allPhotos));
+    addUploadedPhotoId(photo.id);
+    // Dispatch a storage event to notify other components (like RateView) of new data
+    window.dispatchEvent(new Event('storage'));
+}
 
 export default function UploadView() {
   const { toast } = useToast();
@@ -64,9 +72,9 @@ export default function UploadView() {
       const result = await generatePhotoDescription({ photoDataUri: dataUri });
       setDescription(result.description);
     } catch (error: any) {
-        if (error.message && error.message.includes('billing')) {
+        if (error.message && (error.message.includes('billing') || error.message.includes('API key'))) {
             setAiDisabled(true);
-            toast({ variant: "destructive", title: "Fonctionnalité non disponible", description: "La génération IA nécessite un forfait payant." });
+            toast({ variant: "destructive", title: "Fonctionnalité non disponible", description: "La génération IA nécessite une connexion et un forfait payant." });
         } else {
             console.error(error);
             toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de la génération de la description IA." });
@@ -82,14 +90,10 @@ export default function UploadView() {
     setUploadProgress(0);
 
     try {
-        const photoId = doc(collection(db, `artifacts/${appId}/public/data/public_photos`)).id;
-        
         setUploadProgress(33);
-        // Compress the image before uploading
         const imageDataUri = await compressImage(selectedFile);
         setUploadProgress(66);
         
-        // Check size before attempting to upload
         if (new Blob([imageDataUri]).size > 1048487) {
             toast({ variant: "destructive", title: "Erreur", description: "Même après compression, l'image est trop volumineuse pour être enregistrée." });
             setIsUploading(false);
@@ -97,29 +101,28 @@ export default function UploadView() {
             return;
         }
 
-        const newPhotoData: Omit<Photo, 'id'> = {
-            uploaderId: "anonymous",
+        const newPhoto: Photo = {
+            id: `local_${new Date().getTime()}_${Math.random()}`, // Unique local ID
+            uploaderId: "local_user",
             imageDataUri: imageDataUri,
             description,
-            uploadTimestamp: serverTimestamp(),
+            uploadTimestamp: new Date().toISOString(),
             averageRating: 0,
             ratingCount: 0,
             totalRatingSum: 0,
         };
-
-        await setDoc(doc(db, `artifacts/${appId}/public/data/public_photos`, photoId), newPhotoData);
+        
+        savePhotoToLocal(newPhoto);
         setUploadProgress(100);
         
-        addUploadedPhoto(photoId);
-
-        toast({ title: "Photo téléchargée avec succès !" });
+        toast({ title: "Photo enregistrée localement !" });
         setSelectedFile(null);
         setPreviewUrl(null);
         setDescription("");
         if(fileInputRef.current) fileInputRef.current.value = "";
-    } catch (dbError) {
-         console.error("Database error:", dbError);
-         toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement de la photo. Elle est peut-être trop volumineuse." });
+    } catch (localError) {
+         console.error("Local save error:", localError);
+         toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement local de la photo." });
     } finally {
          setIsUploading(false);
          setUploadProgress(0);
@@ -127,7 +130,7 @@ export default function UploadView() {
   };
 
   const isLoading = isUploading || isGenerating;
-  const loadingText = isGenerating ? "Génération..." : isUploading ? `Téléchargement ${Math.round(uploadProgress)}%` : "Télécharger";
+  const loadingText = isGenerating ? "Génération..." : isUploading ? `Enregistrement ${Math.round(uploadProgress)}%` : "Enregistrer la Photo";
 
   return (
     <div className="w-full max-w-2xl space-y-6">

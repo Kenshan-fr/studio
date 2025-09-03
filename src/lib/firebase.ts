@@ -1,24 +1,4 @@
-
-import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-
-// This configuration is now directly managed by the build process.
-const firebaseConfig = {
-  "projectId": "surdice-rate",
-  "appId": "1:946797933867:web:148ae8a716bae2dd7f416e",
-  "storageBucket": "surdice-rate.appspot.com",
-  "apiKey": "AIzaSyCt3FZRSCEOqOPqHAYSL26hs_v7kmYaRfk",
-  "authDomain": "surdice-rate.firebaseapp.com",
-  "measurementId": "",
-  "messagingSenderId": "946797933867"
-};
-
-const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
-
-const auth = getAuth(app);
-const db = getFirestore(app);
-
-process.env.NEXT_PUBLIC_FIREBASE_APP_ID = firebaseConfig.appId;
-
-export { app, auth, db };
+// This file is no longer used as the application has been converted to a fully offline,
+// local storage-based model to bypass Firebase permissions issues.
+// All data is now handled in the respective component views.
+export {};

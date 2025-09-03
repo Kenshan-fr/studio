@@ -3,7 +3,7 @@ export type Photo = {
   uploaderId: string;
   imageDataUri: string;
   description?: string;
-  uploadTimestamp: any; // Using `any` for Firebase Timestamp compatibility
+  uploadTimestamp: any; // Using `any` for ISOString date compatibility
   averageRating: number;
   ratingCount: number;
   totalRatingSum: number;

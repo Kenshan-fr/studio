@@ -3,8 +3,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { collection, doc, getDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import {
   Card,
   CardContent,
@@ -17,8 +15,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import type { Photo } from "@/types";
 
-const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
-const UPLOADED_PHOTOS_KEY = "uploadedPhotos";
+const ALL_PHOTOS_KEY = "allPhotos";
 
 export default function MyPhotosView() {
   const [myPhotos, setMyPhotos] = useState<Photo[]>([]);
@@ -26,42 +23,31 @@ export default function MyPhotosView() {
 
   const getUploadedPhotoIds = (): string[] => {
     if (typeof window === "undefined") return [];
-    const uploaded = localStorage.getItem(UPLOADED_PHOTOS_KEY);
+    const uploaded = localStorage.getItem("uploadedPhotos");
     return uploaded ? JSON.parse(uploaded) : [];
   };
 
-  const fetchMyPhotos = useCallback(async () => {
+  const fetchMyPhotos = useCallback(() => {
     setLoading(true);
+    if (typeof window === "undefined") return;
+
     try {
-      const photoIds = getUploadedPhotoIds();
-      if (photoIds.length === 0) {
-        setMyPhotos([]);
-        return;
-      }
+      const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
+      const allPhotos: Photo[] = allPhotosData ? JSON.parse(allPhotosData) : [];
+      const myPhotoIds = new Set(getUploadedPhotoIds());
 
-      const photoPromises = photoIds.map(async (id) => {
-        const docRef = doc(db, `artifacts/${appId}/public/data/public_photos`, id);
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          return { id: docSnap.id, ...docSnap.data() } as Photo;
-        }
-        return null;
-      });
+      const filteredPhotos = allPhotos.filter(p => myPhotoIds.has(p.id));
 
-      const fetchedPhotos = (await Promise.all(photoPromises)).filter(
-        (p): p is Photo => p !== null
-      );
-      
       // Sort by upload timestamp descending
-      fetchedPhotos.sort((a, b) => {
-        const timestampA = a.uploadTimestamp?.toDate?.() || new Date(0);
-        const timestampB = b.uploadTimestamp?.toDate?.() || new Date(0);
-        return timestampB.getTime() - timestampA.getTime();
+      filteredPhotos.sort((a, b) => {
+        const timestampA = a.uploadTimestamp ? new Date(a.uploadTimestamp).getTime() : 0;
+        const timestampB = b.uploadTimestamp ? new Date(b.uploadTimestamp).getTime() : 0;
+        return timestampB - timestampA;
       });
 
-      setMyPhotos(fetchedPhotos);
+      setMyPhotos(filteredPhotos);
     } catch (error) {
-      console.error("Error fetching my photos:", error);
+      console.error("Error fetching my photos from local storage:", error);
     } finally {
       setLoading(false);
     }
@@ -69,6 +55,10 @@ export default function MyPhotosView() {
 
   useEffect(() => {
     fetchMyPhotos();
+    // Listen for storage changes to update the view
+    const handleStorageChange = () => fetchMyPhotos();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchMyPhotos]);
 
   return (

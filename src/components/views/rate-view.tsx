@@ -3,17 +3,14 @@
 
 import { useState, useEffect, useCallback } from "react";
 import Image from "next/image";
-import { collection, query, limit, getDocs, doc, getDoc, updateDoc, setDoc, orderBy } from "firebase/firestore";
-import { db } from "@/lib/firebase";
-
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Photo } from "@/types";
 import { useToast } from "@/hooks/use-toast";
 
-const appId = process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "default-app-id";
 const RATED_PHOTOS_KEY = "ratedPhotos";
+const ALL_PHOTOS_KEY = "allPhotos";
 
 export default function RateView() {
   const [photosToRate, setPhotosToRate] = useState<Photo[]>([]);
@@ -35,27 +32,30 @@ export default function RateView() {
     localStorage.setItem(RATED_PHOTOS_KEY, JSON.stringify(Array.from(ratedPhotos)));
   };
 
-  const fetchPhotos = useCallback(async () => {
+  const fetchPhotos = useCallback(() => {
     setLoading(true);
+    if (typeof window === "undefined") {
+      setLoading(false);
+      return;
+    }
     try {
-      const photosRef = collection(db, `artifacts/${appId}/public/data/public_photos`);
-      const photosQuery = query(photosRef, orderBy("uploadTimestamp", "desc"), limit(50));
-      const photosSnapshot = await getDocs(photosQuery);
+      const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
+      const allPhotos: Photo[] = allPhotosData ? JSON.parse(allPhotosData) : [];
       
       const ratedPhotoIds = getRatedPhotos();
       
-      const fetchedPhotos = photosSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() } as Photo))
-        .filter(photo => !ratedPhotoIds.has(photo.id));
+      const unratedPhotos = allPhotos
+        .filter(photo => !ratedPhotoIds.has(photo.id))
+        .sort((a, b) => (new Date(b.uploadTimestamp).getTime() - new Date(a.uploadTimestamp).getTime())); // Newest first
 
-      setPhotosToRate(fetchedPhotos);
+      setPhotosToRate(unratedPhotos);
       setCurrentPhotoIndex(0);
-      if (fetchedPhotos.length > 0) {
+      if (unratedPhotos.length > 0) {
         setIsImageLoading(true);
       }
     } catch (error) {
-      console.error("Error fetching photos: ", error);
-      toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les photos." });
+      console.error("Error fetching photos from local storage: ", error);
+      toast({ variant: "destructive", title: "Erreur", description: "Impossible de charger les photos depuis le stockage local." });
     } finally {
       setLoading(false);
     }
@@ -63,6 +63,9 @@ export default function RateView() {
 
   useEffect(() => {
     fetchPhotos();
+    const handleStorageChange = () => fetchPhotos();
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [fetchPhotos]);
   
   const currentPhoto = photosToRate[currentPhotoIndex];
@@ -74,34 +77,40 @@ export default function RateView() {
   }, [currentPhotoIndex, currentPhoto]);
 
   const handleRate = async (score: number) => {
-    if (!currentPhoto) return;
+    if (!currentPhoto || typeof window === "undefined") return;
     
     addRatedPhoto(currentPhoto.id);
 
-    const photoDocRef = doc(db, `artifacts/${appId}/public/data/public_photos`, currentPhoto.id);
-    
     try {
-      const photoSnap = await getDoc(photoDocRef);
-      if (!photoSnap.exists()) throw new Error("Photo not found");
+      const allPhotosData = localStorage.getItem(ALL_PHOTOS_KEY);
+      let allPhotos: Photo[] = allPhotosData ? JSON.parse(allPhotosData) : [];
 
-      const photoData = photoSnap.data();
-      const newRatingCount = (photoData.ratingCount || 0) + 1;
-      const newTotalRatingSum = (photoData.totalRatingSum || 0) + score;
+      const photoIndex = allPhotos.findIndex(p => p.id === currentPhoto.id);
+      if (photoIndex === -1) throw new Error("Photo not found in local storage");
+
+      const photoToUpdate = allPhotos[photoIndex];
+      const newRatingCount = (photoToUpdate.ratingCount || 0) + 1;
+      const newTotalRatingSum = (photoToUpdate.totalRatingSum || 0) + score;
       const newAverageRating = newTotalRatingSum / newRatingCount;
 
-      await updateDoc(photoDocRef, {
+      allPhotos[photoIndex] = {
+        ...photoToUpdate,
         ratingCount: newRatingCount,
         totalRatingSum: newTotalRatingSum,
         averageRating: newAverageRating
-      });
+      };
       
+      localStorage.setItem(ALL_PHOTOS_KEY, JSON.stringify(allPhotos));
+      
+      // Dispatch a storage event to notify other components
+      window.dispatchEvent(new Event('storage'));
+
       toast({ title: `Vous avez noté cette photo ${score}/10 !` });
 
       if (currentPhotoIndex < photosToRate.length - 1) {
         setCurrentPhotoIndex(currentPhotoIndex + 1);
       } else {
-        setPhotosToRate([]);
-        fetchPhotos();
+        setPhotosToRate([]); // You've rated all available photos
       }
     } catch (error) {
       toast({ variant: "destructive", title: "Erreur", description: "Erreur lors de l'enregistrement de votre note." });
