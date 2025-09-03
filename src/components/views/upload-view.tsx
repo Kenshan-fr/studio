@@ -72,10 +72,12 @@ export default function UploadView() {
   const handleUpload = async () => {
     if (!selectedFile || !user) return;
     setIsUploading(true);
+    setUploadProgress(0);
     const photoId = crypto.randomUUID();
 
     try {
-        const storageRef = ref(storage, `artifacts/${appId}/public/images/${user.uid}/${photoId}_${selectedFile.name}`);
+        const filePath = `artifacts/${appId}/public/images/${user.uid}/${photoId}_${selectedFile.name}`;
+        const storageRef = ref(storage, filePath);
         const uploadTask = uploadBytesResumable(storageRef, selectedFile);
 
         uploadTask.on('state_changed', 
