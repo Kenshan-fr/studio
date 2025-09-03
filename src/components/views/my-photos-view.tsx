@@ -108,10 +108,10 @@ export default function MyPhotosView() {
                 </p>
                 <div className="flex justify-between w-full">
                   <Badge variant="secondary">
-                    Note: {photo.averageRating.toFixed(2)} / 10
+                    Note: {photo.averageRating ? photo.averageRating.toFixed(2) : '0.00'} / 10
                   </Badge>
                   <Badge variant="outline">
-                    {photo.ratingCount} vote{photo.ratingCount !== 1 ? "s" : ""}
+                    {photo.ratingCount || 0} vote{photo.ratingCount !== 1 ? "s" : ""}
                   </Badge>
                 </div>
               </CardFooter>
